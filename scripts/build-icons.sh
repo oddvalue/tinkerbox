@@ -1,5 +1,6 @@
 #!/bin/sh
-# Builds the app icons from build/icon.svg: build/icon.png (all platforms) and build/icon.icns (macOS).
+# Builds the app icons from build/icon.svg: build/icon.png (all platforms), build/icons/ (Linux sizes) and
+# build/icon.icns (macOS).
 set -e
 cd "$(dirname "$0")/.."
 npx electron scripts/render-icon.cjs

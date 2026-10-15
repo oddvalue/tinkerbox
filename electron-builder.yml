@@ -50,7 +50,9 @@ win:
   icon: build/icon.png
   target: nsis
 linux:
-  icon: build/icon.png
+  # 16-512 px PNGs (npm run icons): the hicolor icon theme has no 1024 size, so a single build/icon.png shows up as
+  # a generic icon in the launcher and the dock.
+  icon: build/icons
   target:
     - AppImage
     - deb

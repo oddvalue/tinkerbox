@@ -23,7 +23,7 @@
     <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
   </g>
   <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#glow)"/>
-  <rect x="101.5" y="101.5" width="821" height="821" rx="184.5" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="3"/>
+  <rect id="rim" x="101.5" y="101.5" width="821" height="821" rx="184.5" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="3"/>
 
   <!-- glow behind the spark -->
   <circle cx="512" cy="372" r="190" fill="url(#spark)"/>
