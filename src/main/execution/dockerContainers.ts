@@ -3,7 +3,7 @@
  * details the form prefills (working directory and bind mounts → project path and host folder).
  */
 import type { DockerContainer } from '@shared/types'
-import { findDockerCli } from './dockerTransport'
+import { DOCKER_MISSING, findDockerCli } from './dockerCli'
 import { CommandError, runCapture, summarizeOutput } from './process'
 
 const MAX_CONTAINERS = 200
@@ -17,7 +17,10 @@ type Inspected = {
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '')
 
-/** Pure: `docker inspect` JSON → DockerContainer list, sorted by name. Unusable entries are skipped. */
+/**
+ * Pure: `docker inspect` JSON → DockerContainer list, sorted by name. Unusable entries are skipped, and so are
+ * `docker compose run` one-off containers: they are left behind easily and would bury the service containers.
+ */
 export function parseInspect(json: string): DockerContainer[] {
   let raw: unknown
   try {
@@ -32,6 +35,7 @@ export function parseInspect(json: string): DockerContainer[] {
     const name = str(item?.Name).replace(/^\//, '')
     if (!id || !name) continue
     const labels = item.Config?.Labels ?? {}
+    if (labels['com.docker.compose.oneoff'] === 'True') continue
     out.push({
       id: id.slice(0, 12),
       name,
@@ -50,7 +54,7 @@ export function parseInspect(json: string): DockerContainer[] {
 /** Running containers; rejects with an actionable message when the CLI or the daemon is unavailable. */
 export async function listDockerContainers(findCli: () => string | null = () => findDockerCli()): Promise<DockerContainer[]> {
   const docker = findCli()
-  if (!docker) throw new Error('Docker CLI not found. Install Docker (or set TINKERBOX_DOCKER to a compatible CLI) and restart Tinkerbox.')
+  if (!docker) throw new Error(DOCKER_MISSING)
   try {
     const ps = await runCapture(docker, ['ps', '-q', '--no-trunc'], { timeoutMs: 15_000, label: 'docker ps' })
     const ids = ps.stdout.split(/\s+/).filter(Boolean).slice(0, MAX_CONTAINERS)

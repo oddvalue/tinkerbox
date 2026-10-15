@@ -118,12 +118,27 @@ describe('PidLineFilter', () => {
     expect(seen.join('')).toBe('PHP Warning: x\nmore\n')
   })
 
-  it('passes Docker errors through unchanged', () => {
+  it('holds Docker errors until the process ends, then passes them on (or drops them)', () => {
     const seen: string[] = []
     const filter = new PidLineFilter((c) => seen.push(c))
     filter.push('Error response from daemon: No such container: app\n')
+    expect(seen).toEqual([])
+    filter.flush()
     expect(filter.pid).toBeNull()
     expect(seen.join('')).toBe('Error response from daemon: No such container: app\n')
+    const dropped: string[] = []
+    const retried = new PidLineFilter((c) => dropped.push(c))
+    retried.push('Error response from daemon: No such container: app\n')
+    retried.flush(true)
+    expect(dropped).toEqual([])
+  })
+
+  it('keeps Docker warnings printed before the PID line', () => {
+    const seen: string[] = []
+    const filter = new PidLineFilter((c) => seen.push(c))
+    filter.push('WARNING: something\n__TINKERBOX_PID__ 7\nphp says hi\n')
+    expect(filter.pid).toBe(7)
+    expect(seen.join('')).toBe('WARNING: something\nphp says hi\n')
   })
 
   it('flushes a partial first line when the process ends', () => {
@@ -164,7 +179,8 @@ describe('parseInspect', () => {
           { Type: 'volume', Source: '/var/lib/docker/volumes/x', Destination: '/data' }
         ]
       },
-      { Id: '', Name: '/broken' }
+      { Id: '', Name: '/broken' },
+      { Id: 'fff', Name: '/shop-web-run-1a2b', Config: { Labels: { 'com.docker.compose.oneoff': 'True' } } }
     ])
     expect(parseInspect(json)).toEqual([
       {
@@ -197,7 +213,7 @@ describe('editor paths for Docker connections', () => {
 describe.skipIf(!posix)('docker transport with a fake CLI', () => {
   it('streams output, hides the PID line and reports the exit code', async () => {
     const fake = fakeDocker()
-    const transport = createDockerTransport({ findCli: () => fake.cli })
+    const transport = createDockerTransport({ findCli: () => fake.cli, listContainers: async () => [] })
     const err: string[] = []
     const result = await transport.run(
       request(dockerConnection({ phpBinary: join(fake.cli, '..', 'sh-php') }), { script: 'echo out; echo warn >&2; exit 3', onStderr: (c) => err.push(c) })
@@ -211,14 +227,46 @@ describe.skipIf(!posix)('docker transport with a fake CLI', () => {
 
   it('rejects with an actionable message when the container is missing or stopped', async () => {
     const fake = fakeDocker()
-    const transport = createDockerTransport({ findCli: () => fake.cli })
+    const transport = createDockerTransport({ findCli: () => fake.cli, listContainers: async () => [] })
     await expect(transport.run(request(dockerConnection({ container: 'missing' })))).rejects.toThrow(/Container "missing" not found/)
     await expect(transport.run(request(dockerConnection({ container: 'stopped' })))).rejects.toThrow(/Container "stopped" is not running/)
   })
 
+  it('runs in the compose service\'s current container when the saved one is gone', async () => {
+    const fake = fakeDocker()
+    const transport = createDockerTransport({
+      findCli: () => fake.cli,
+      listContainers: async () => [
+        { id: '1', name: 'shop-web-2', image: '', workingDir: '', mounts: [], composeProject: 'shop', composeService: 'web' }
+      ]
+    })
+    const err: string[] = []
+    const conn = dockerConnection({ container: 'missing', phpBinary: join(fake.cli, '..', 'sh-php'), compose: { project: 'shop', service: 'web', dir: '/home/me/shop' } })
+    const result = await transport.run(request(conn, { script: 'echo ok', onStderr: (c) => err.push(c) }))
+    expect(result.stdout).toBe('ok\n')
+    expect(result.stderr).toBe('')
+    expect(err).toEqual([])
+    expect(fake.log()).toHaveLength(2)
+    expect(fake.log()[1]).toContain(' shop-web-2 sh -c ')
+  })
+
+  it('names the containers of a compose project typed as the container', async () => {
+    const fake = fakeDocker()
+    const transport = createDockerTransport({
+      findCli: () => fake.cli,
+      listContainers: async () => [
+        { id: '1', name: 'missing-web-1', image: '', workingDir: '', mounts: [], composeProject: 'missing', composeService: 'web' },
+        { id: '2', name: 'missing-mysql-1', image: '', workingDir: '', mounts: [], composeProject: 'missing', composeService: 'mysql' }
+      ]
+    })
+    await expect(transport.run(request(dockerConnection({ container: 'missing' })))).rejects.toThrow(
+      /"missing" is a compose project; its running containers are missing-web-1, missing-mysql-1/
+    )
+  })
+
   it('rejects when PHP is missing in the container', async () => {
     const fake = fakeDocker()
-    const transport = createDockerTransport({ findCli: () => fake.cli })
+    const transport = createDockerTransport({ findCli: () => fake.cli, listContainers: async () => [] })
     await expect(transport.run(request(dockerConnection({ phpBinary: 'php-does-not-exist-here' })))).rejects.toThrow(
       /PHP binary "php-does-not-exist-here" not found in container "app"/
     )
@@ -231,7 +279,7 @@ describe.skipIf(!posix)('docker transport with a fake CLI', () => {
 
   it('stops the process inside the container on cancel', async () => {
     const fake = fakeDocker()
-    const transport = createDockerTransport({ findCli: () => fake.cli })
+    const transport = createDockerTransport({ findCli: () => fake.cli, listContainers: async () => [] })
     const controller = new AbortController()
     const slowPhp = join(fake.cli, '..', 'slow-php')
     const running = transport.run(
@@ -251,7 +299,7 @@ describe.skipIf(!posix)('docker transport with a fake CLI', () => {
 
   it.skipIf(!hostPhp)('runs the real runner bundle through runCode', async () => {
     const fake = fakeDocker()
-    registerTransport(createDockerTransport({ findCli: () => fake.cli }))
+    registerTransport(createDockerTransport({ findCli: () => fake.cli, listContainers: async () => [] }))
     const dir = makeTempDir('tw-docker-project-')
     const conn = dockerConnection({ path: dir, phpBinary: hostPhp })
     const ctx = fakeContext({ resourcesPath: repoRoot, connections: { [conn.id]: conn } })

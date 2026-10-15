@@ -133,7 +133,7 @@ A tab's `connectionId: null` = default: Default Working Directory → Sandbox (i
 | `isDebugging(id)` | Xdebug toggle state |
 | `load()`, `openLocal(dir)`, `pickDirectory(title?)` | folder dialog → openLocal (null when cancelled) |
 | `save(conn)`, `remove(id)` (alias `delete`), `test(conn)`, `touch(id)`, `clearRecents()` | |
-| `openDocker(input)`, `listContainers()` | save a Docker connection as used (reuses one with the same container, path and user); running containers (`docker:containers`) |
+| `openDocker(input)`, `listContainers()`, `composeProject(dir)`, `composeUp(dir, service)` | save a Docker connection as used (reuses the same compose service, else the same container, path and user); running containers; compose project in a folder (null without a compose file); `docker compose up -d <service>` |
 | `toggleDebug(id \| null): Promise<boolean>` | flips `debug` on the project behind the tab |
 
 `colorForName(name)`, `isImplicitConnection(id)`, `isDockerConnection(conn)`, `connectionSubtitle(conn, home?)`,
@@ -233,7 +233,7 @@ Modal components declare the props below with `defineProps`, use `<Modal>` from 
 | `logs` | modals/logs/LogsModal.vue | `{ connectionId: string \| null }` |
 | `panels` | modals/panels/PanelsModal.vue | `{ connectionId: string \| null }` |
 | `php` | modals/php/PhpSettingsModal.vue | `{ connectionId: string \| null }` |
-| `docker` | modals/docker/DockerConnectionModal.vue | `{ connectionId?: string }` (new connection, or edit a stored one) |
+| `docker` | modals/docker/DockerConnectionModal.vue | `{ connectionId?: string; flow?: 'compose' \| 'containers'; pickFolder?: boolean }` (new or edit; `flow` picks the tab, `pickFolder` opens the compose folder picker) |
 | `wrapped` | modals/wrapped/WrappedModal.vue | `{ year?: number }` |
 | `share` | modals/share/ShareGistModal.vue | `{ code: string; connectionId?: string \| null }` |
 | `tablePreview` | output/TablePreviewModal.vue | `{ value: DumpNode; title?: string }` |
@@ -261,7 +261,7 @@ commands — or every command when `api.isMock`), palette and buttons. Plain-key
 modal / context menu / popover is open or in form fields. While a modal is open only `closeTab`, `commandPalette`,
 `openSettings`, `showHistory`, `showSnippets`, `showLogs`, `zenMode`, `run` pass the renderer listener.
 
-Notable implementations: `openDocker` opens the `docker` modal; `closeTab` closes the top modal first; `showHistory/showSnippets/showLogs/openSettings/
+Notable implementations: `openDocker` opens the `docker` modal; `openDockerCompose` opens it in the compose flow and runs the folder picker; `closeTab` closes the top modal first; `showHistory/showSnippets/showLogs/openSettings/
 commandPalette` toggle; `toggleToolbar` and `toggleSidebar` both toggle the icon sidebar (`showToolbar`, the
 "toolbar" setting; ⌘\ is the "purist mode" alias); `zenMode` = `ui.toggleZen()`; `zoomIn/zoomOut/resetZoom` change
 `editorFontSize` (8–40) and `outputFontSize` (8–32); `toggleFullscreen` uses the HTML fullscreen API;

@@ -416,8 +416,12 @@ prints its PID (also the process group, as `docker exec` starts a new session) o
 transport strips that line, and when a run is cancelled, times out or hits the output limit, `spawnStreaming`'s
 `onTerminate` hook runs `kill -TERM -<pid>` (then `-KILL`) in the container. Docker errors from before PHP started
 (no such container, not running, daemon down, missing PHP) reject `run()` with an actionable message.
-`docker:containers` (`dockerContainers.ts`) lists running containers with `docker ps` + `docker inspect` so the
-connection form can prefill the path (working directory) and host folder (bind-mount source). "Open in editor" maps
+`docker:containers` (`dockerContainers.ts`) lists running containers with `docker ps` + `docker inspect` (skipping
+`docker compose run` one-offs) so the connection form can prefill the path (working directory) and host folder
+(bind-mount source). `docker:composeProject` / `docker:composeUp` (`dockerCompose.ts`) read the compose project in a
+folder (`docker compose config` + `ps`, run in that folder) and start a service. A connection made from a compose file
+keeps `compose: { project, service, dir }`; when its container no longer exists, the transport retries once in the
+service's current container (found by the compose labels). `dockerCli.ts` locates the CLI for all three. "Open in editor" maps
 container paths below `path` into `hostPath` (`src/main/ipc/editorPaths.ts`).
 
 **Extension point: transports.** Execution goes through a small interface, so a transport for another target is a new

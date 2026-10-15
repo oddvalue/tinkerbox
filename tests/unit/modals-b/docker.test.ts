@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { DockerContainer } from '@shared/types'
+import type { DockerComposeProject, DockerComposeService, DockerContainer } from '@shared/types'
 import {
+  EDIT_SUGGESTIONS,
+  NEW_SUGGESTIONS,
+  applyComposeService,
   applySuggestions,
+  composeFileNames,
+  composeFill,
+  isNonPhpService,
+  pickPhpService,
+  sameHostPath,
   composeLabel,
   dockerInput,
   emptyDockerForm,
@@ -26,7 +34,7 @@ function container(patch: Partial<DockerContainer> = {}): DockerContainer {
   }
 }
 
-const FRESH: DockerSuggestions = { path: '', hostPath: '', name: '' }
+const FRESH: DockerSuggestions = NEW_SUGGESTIONS
 
 describe('docker suggestions', () => {
   it('suggests the working directory, else a mounted /var/www/html', () => {
@@ -67,7 +75,7 @@ describe('docker form prefill', () => {
   it('fills path, host folder and name when a container is picked', () => {
     const { form, suggested } = applySuggestions({ ...emptyDockerForm(), container: 'shop-app-1' }, FRESH, container())
     expect(form).toMatchObject({ path: '/var/www/html', hostPath: '/Users/dev/shop', name: 'shop' })
-    expect(suggested).toEqual({ path: '/var/www/html', hostPath: '/Users/dev/shop', name: 'shop' })
+    expect(suggested).toEqual({ path: '/var/www/html', hostPath: '/Users/dev/shop', name: 'shop', user: '' })
   })
 
   it('keeps fields the user edited and recomputes the host folder when the path changes', () => {
@@ -87,9 +95,9 @@ describe('docker form prefill', () => {
     const form = { ...emptyDockerForm(), container: 'typed', path: '/x' }
     expect(applySuggestions(form, FRESH, null).form).toBe(form)
     const saved = { container: 'shop-app-1', path: '', hostPath: '', phpBinary: 'php8.3', user: '', name: 'Shop' }
-    const edit = applySuggestions(saved, { path: null, hostPath: null, name: null }, container())
+    const edit = applySuggestions(saved, EDIT_SUGGESTIONS, container())
     expect(edit.form).toEqual(saved)
-    expect(edit.suggested).toEqual({ path: null, hostPath: null, name: null })
+    expect(edit.suggested).toEqual(EDIT_SUGGESTIONS)
   })
 })
 
@@ -111,5 +119,117 @@ describe('docker form validation', () => {
       user: '',
       name: 'app'
     })
+  })
+})
+
+// Real project from a user's machine: the PHP app runs in "web", next to databases and other helpers.
+const TMSTORES_DIR = '/home/jim/Projects/tmstores'
+
+function service(name: string, patch: Partial<DockerComposeService> = {}): DockerComposeService {
+  return { name, image: '', workingDir: '', user: '', mounts: [], container: `tmstores-${name}-1`, state: 'running', ...patch }
+}
+
+function tmstores(patch: Partial<DockerComposeProject> = {}): DockerComposeProject {
+  return {
+    dir: TMSTORES_DIR,
+    files: [`${TMSTORES_DIR}/docker-compose.yml`],
+    project: 'tmstores',
+    services: [
+      service('mysql', { image: 'mysql:8.0' }),
+      service('mysql-test', { image: 'mysql:8.0' }),
+      service('web', {
+        mounts: [
+          { source: TMSTORES_DIR, destination: '/home/tmstores/current' },
+          { source: '/home/jim/.ssh', destination: '/home/tmstores/.ssh' }
+        ]
+      }),
+      service('redis', { image: 'redis:alpine' }),
+      service('mailhog', { image: 'mailhog/mailhog' }),
+      service('typesense', { image: 'typesense/typesense:27.1' }),
+      service('clickhouse', { image: 'clickhouse/clickhouse-server' })
+    ],
+    ...patch
+  }
+}
+
+describe('compose service pick', () => {
+  it('picks the service that mounts the project folder', () => {
+    expect(pickPhpService(tmstores())?.name).toBe('web')
+  })
+
+  it('skips databases, caches and other helpers by name or image', () => {
+    expect(isNonPhpService(service('db', { image: 'mariadb:11' }))).toBe(true)
+    expect(isNonPhpService(service('mysql-test'))).toBe(true)
+    expect(isNonPhpService(service('cache', { image: 'bitnami/redis:7' }))).toBe(true)
+    expect(isNonPhpService(service('laravel.test', { image: 'sail-8.4/app' }))).toBe(false)
+    expect(isNonPhpService(service('php-fpm', { image: 'php:8.3-fpm' }))).toBe(false)
+    expect(pickPhpService(tmstores({ services: [service('mysql'), service('redis')] }))).toBeNull()
+  })
+
+  it('prefers usual app names and PHP images when nothing mounts the folder', () => {
+    const project = tmstores({ services: [service('mysql'), service('worker', { image: 'node:20' }), service('queue'), service('app')] })
+    expect(pickPhpService(project)?.name).toBe('app')
+    expect(pickPhpService(tmstores({ services: [service('queue'), service('runner', { image: 'php:8.4-cli' })] }))?.name).toBe('runner')
+    // Running beats stopped when nothing else tells them apart.
+    expect(pickPhpService(tmstores({ services: [service('one', { state: 'exited' }), service('two')] }))?.name).toBe('two')
+  })
+
+  it('compares host folders without trailing slashes, Windows paths without case', () => {
+    expect(sameHostPath('/home/jim/Projects/tmstores/', TMSTORES_DIR)).toBe(true)
+    expect(sameHostPath('/home/jim/projects/tmstores', TMSTORES_DIR)).toBe(false)
+    expect(sameHostPath('C:\\Code\\Shop\\', 'c:/code/shop')).toBe(true)
+    expect(sameHostPath('', '')).toBe(false)
+  })
+
+  it('names compose files for display', () => {
+    expect(composeFileNames(tmstores({ files: ['/a/compose.yaml', '/a/compose.override.yaml'] }))).toBe('compose.yaml, compose.override.yaml')
+  })
+})
+
+describe('compose prefill', () => {
+  it('fills the form from the PHP service', () => {
+    const project = tmstores()
+    const web = project.services.find((s) => s.name === 'web')!
+    expect(composeFill(project, web)).toEqual({
+      container: 'tmstores-web-1',
+      path: '/home/tmstores/current',
+      hostPath: TMSTORES_DIR,
+      user: '',
+      name: 'tmstores'
+    })
+  })
+
+  it('names other services after project and service, and falls back to the working directory', () => {
+    const project = tmstores({ services: [service('web', { mounts: [{ source: TMSTORES_DIR, destination: '/app/' }] }), service('cli', { workingDir: '/srv/app', user: 'www-data' })] })
+    expect(composeFill(project, project.services[0]).path).toBe('/app')
+    expect(composeFill(project, project.services[1])).toMatchObject({ path: '/srv/app', user: 'www-data', name: 'tmstores cli' })
+    // Without a mount or working directory, the running container's working directory decides.
+    const bare = tmstores({ services: [service('app')] })
+    const running: DockerContainer = { id: 'x', name: 'tmstores-app-1', image: '', workingDir: '/var/www', mounts: [], composeProject: 'tmstores', composeService: 'app' }
+    expect(composeFill(bare, bare.services[0], running).path).toBe('/var/www')
+    expect(composeFill(bare, bare.services[0]).path).toBe('')
+  })
+
+  it('keeps edited fields and saved values', () => {
+    const project = tmstores()
+    const web = project.services.find((s) => s.name === 'web')!
+    const mysql = project.services[0]
+    let step = applyComposeService(emptyDockerForm(), FRESH, project, web)
+    expect(step.form).toMatchObject({ container: 'tmstores-web-1', path: '/home/tmstores/current', name: 'tmstores' })
+    step = applyComposeService({ ...step.form, user: 'tmstores' }, step.suggested, project, mysql)
+    expect(step.form).toMatchObject({ container: 'tmstores-mysql-1', user: 'tmstores', name: 'tmstores mysql', hostPath: TMSTORES_DIR })
+
+    const saved = { container: 'old-web-1', path: '/srv', hostPath: '', phpBinary: '', user: 'tmstores', name: 'Shop' }
+    const edit = applyComposeService(saved, EDIT_SUGGESTIONS, project, web)
+    expect(edit.form).toEqual({ ...saved, container: 'tmstores-web-1' })
+    expect(edit.suggested).toEqual(EDIT_SUGGESTIONS)
+  })
+
+  it('sends the compose reference only when given', () => {
+    const ref = { project: 'tmstores', service: 'web', dir: TMSTORES_DIR }
+    const form = { ...emptyDockerForm(), container: 'tmstores-web-1' }
+    expect(dockerInput(form, ref).compose).toEqual(ref)
+    expect('compose' in dockerInput(form)).toBe(true)
+    expect(dockerInput(form).compose).toBeUndefined()
   })
 })

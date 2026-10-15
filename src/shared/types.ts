@@ -53,6 +53,20 @@ export interface DockerConnection extends ConnectionBase {
   hostPath?: string
   /** `docker exec --user`; empty => the container's default user. */
   user?: string
+  /**
+   * Set when the connection was made from a compose file. When `container` no longer exists (the service was
+   * recreated), the transport runs in the service's current container instead.
+   */
+  compose?: DockerComposeRef
+}
+
+export interface DockerComposeRef {
+  /** Compose project name (`com.docker.compose.project`). */
+  project: string
+  /** Service name (`com.docker.compose.service`). */
+  service: string
+  /** Project folder on this machine that holds the compose file. */
+  dir: string
 }
 
 export type Connection = LocalConnection | DockerConnection
@@ -70,6 +84,33 @@ export interface DockerContainer {
   /** `com.docker.compose.project` / `com.docker.compose.service` labels, '' when absent. */
   composeProject: string
   composeService: string
+}
+
+/** A service of a compose project (`docker:composeProject`). */
+export interface DockerComposeService {
+  name: string
+  /** `image:` from the compose file, '' for build-only services. */
+  image: string
+  /** `working_dir:` from the compose file, '' when unset (the image's default applies). */
+  workingDir: string
+  /** `user:` from the compose file, '' when unset. */
+  user: string
+  /** Bind mounts with absolute host sources. */
+  mounts: Array<{ source: string; destination: string }>
+  /** Name of the service's container ('' when it has none), and its state ('running', 'exited', … or ''). */
+  container: string
+  state: string
+}
+
+/** The compose project found in a folder (`docker compose config` + `docker compose ps`). */
+export interface DockerComposeProject {
+  /** The folder that was searched (absolute). */
+  dir: string
+  /** Compose files in use (absolute), as `docker compose` resolved them. */
+  files: string[]
+  /** Project name (`name:` or the folder name). */
+  project: string
+  services: DockerComposeService[]
 }
 
 /** Placeholder sent to the renderer instead of stored secrets. Saving it back keeps the old secret. */

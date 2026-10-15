@@ -44,6 +44,8 @@ export function localConnectionId(path: string, platform: NodeJS.Platform = proc
 
 /** Container names and ids as Docker accepts them; also keeps the value safe as a `docker exec` argument. */
 const CONTAINER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,254}$/
+/** Compose project names: lowercase letters, digits, `-` and `_`. */
+const COMPOSE_PROJECT = /^[a-z0-9][a-z0-9_-]{0,254}$/
 /** `docker exec --user` values: name or uid, optionally `:group` / `:gid`. */
 const CONTAINER_USER = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,63})?$/
 
@@ -88,6 +90,13 @@ function sanitizeDockerConnection(input: Record<string, unknown>, now: number): 
   if (user !== undefined) {
     if (!CONTAINER_USER.test(user)) throw new TypeError('Container user must be a user name or uid (optionally with :group)')
     conn.user = user
+  }
+  if (isPlainObject(input.compose)) {
+    const { project, service, dir } = input.compose
+    if (typeof project !== 'string' || !COMPOSE_PROJECT.test(project)) throw new TypeError('Compose project must be a compose project name')
+    if (typeof service !== 'string' || !CONTAINER_NAME.test(service)) throw new TypeError('Compose service must be a service name')
+    if (typeof dir !== 'string' || !isAbsolute(dir)) throw new TypeError('Compose project folder must be absolute')
+    conn.compose = { project, service, dir: dir.slice(0, 4096) }
   }
   copyCommonFields(input, conn)
   return conn

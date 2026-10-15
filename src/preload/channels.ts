@@ -23,6 +23,8 @@ export const INVOKE_CHANNELS = [
   'php:inspect',
   'herd:sites',
   'docker:containers',
+  'docker:composeProject',
+  'docker:composeUp',
   'sandbox:status',
   'sandbox:install',
   'run:start',

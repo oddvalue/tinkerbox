@@ -50,8 +50,11 @@ export interface ModalPropsMap {
   logs: { connectionId: string | null }
   panels: { connectionId: string | null }
   php: { connectionId: string | null }
-  /** New Docker connection (no `connectionId`) or edit an existing one. */
-  docker: { connectionId?: string }
+  /**
+   * New Docker connection (no `connectionId`) or edit an existing one. `flow` picks the tab (running containers
+   * or a compose file); `pickFolder` opens the folder picker of the compose flow right away.
+   */
+  docker: { connectionId?: string; flow?: DockerFlow; pickFolder?: boolean }
   wrapped: { year?: number }
   share: { code: string; connectionId?: string | null }
   tablePreview: { value: DumpNode; title?: string }
@@ -60,6 +63,8 @@ export interface ModalPropsMap {
   /** Confirmation (no `prompt`) or text prompt (`prompt` set). Prefer ui.confirm() / ui.prompt(). */
   confirm: ConfirmOptions & { prompt?: Omit<PromptOptions, 'title' | 'message' | 'confirmLabel' | 'cancelLabel'> }
 }
+
+export type DockerFlow = 'compose' | 'containers'
 
 export type ModalName = keyof ModalPropsMap
 

@@ -7,41 +7,19 @@
  * timeout, output limit) also runs `kill -TERM -<pid>` in the container. `docker exec` makes PHP a process-group
  * leader, so the negative PID also stops processes started by user code.
  */
-import type { Connection, DockerConnection } from '@shared/types'
-import { expandHome, findExecutable } from '../env/which'
+import type { Connection, DockerConnection, DockerContainer } from '@shared/types'
 import { phpFlags } from './argv'
-import { DEFAULT_MAX_OUTPUT_BYTES, runCapture, spawnStreaming, summarizeOutput } from './process'
+import { DOCKER_MISSING, findDockerCli } from './dockerCli'
+import { listDockerContainers } from './dockerContainers'
+import { DEFAULT_MAX_OUTPUT_BYTES, runCapture, spawnStreaming, summarizeOutput, type ProcessResult } from './process'
 import type { Transport, TransportRequest, TransportResult } from './transport'
 
 /** Written to stderr by the wrapper before PHP starts; stripped from the output. */
 export const PID_MARKER = '__TINKERBOX_PID__'
-const PID_LINE = new RegExp(`^${PID_MARKER} (\\d+)\\n`)
+const PID_LINE = new RegExp(`(^|\\n)${PID_MARKER} (\\d+)\\n`)
 
 /** POSIX sh wrapper: report the PID (= process group, see the header), then replace the shell with PHP. */
 const WRAPPER = `printf '${PID_MARKER} %s\\n' "$$" >&2; exec "$0" "$@"`
-
-/** Where Docker Desktop, OrbStack, Colima and Homebrew put the CLI; GUI apps often start without them on PATH. */
-const DOCKER_DIRS = [
-  '/usr/local/bin',
-  '/opt/homebrew/bin',
-  '~/.orbstack/bin',
-  '~/.docker/bin',
-  '/Applications/Docker.app/Contents/Resources/bin',
-  '/Applications/OrbStack.app/Contents/MacOS/xbin'
-]
-
-/**
- * The container CLI: `TINKERBOX_DOCKER` when set (a path or a name such as `podman`), else `docker` on PATH or in
- * the usual install folders. Returns null when none is found.
- */
-export function findDockerCli(env: NodeJS.ProcessEnv = process.env): string | null {
-  const override = env.TINKERBOX_DOCKER?.trim()
-  if (override) return findExecutable(override, DOCKER_DIRS.map((d) => expandHome(d)))
-  return findExecutable('docker', DOCKER_DIRS.map((d) => expandHome(d)))
-}
-
-const DOCKER_MISSING =
-  'Docker CLI not found. Install Docker (or set TINKERBOX_DOCKER to the path of a compatible CLI such as podman) and restart Tinkerbox.'
 
 /** Arguments for `docker exec` that run PHP (with `flags`) through the PID-reporting wrapper. */
 export function dockerExecArgs(conn: DockerConnection, flags: string[]): string[] {
@@ -52,7 +30,10 @@ export function dockerExecArgs(conn: DockerConnection, flags: string[]): string[
   return args
 }
 
-/** Splits the wrapper's PID line off the front of the stderr stream; everything else passes through. */
+/**
+ * Takes the wrapper's PID line out of the stderr stream. Text before it (Docker's own errors and warnings) is held
+ * until the line arrives or the process ends, so a failed attempt can be dropped and retried without showing it.
+ */
 export class PidLineFilter {
   pid: number | null = null
   private buffer = ''
@@ -66,20 +47,18 @@ export class PidLineFilter {
       return
     }
     this.buffer += chunk
-    const newline = this.buffer.indexOf('\n')
-    // Docker's own errors (no such container…) arrive instead of the marker: pass them on unchanged.
-    if (newline === -1 && PID_MARKER.startsWith(this.buffer.slice(0, PID_MARKER.length)) && this.buffer.length < 64) return
-    this.done = true
     const match = PID_LINE.exec(this.buffer)
-    if (match) this.pid = Number(match[1])
-    const rest = match ? this.buffer.slice(match[0].length) : this.buffer
+    if (!match) return
+    this.pid = Number(match[2])
+    this.done = true
+    const rest = this.buffer.slice(0, match.index + match[1].length) + this.buffer.slice(match.index + match[0].length)
     this.buffer = ''
     if (rest) this.forward(rest)
   }
 
-  /** Text held back while waiting for a complete first line (the process ended mid-line). */
-  flush(): void {
-    if (!this.done && this.buffer) this.forward(this.buffer)
+  /** The process ended: pass on what was held back (or drop it with `discard`). */
+  flush(discard = false): void {
+    if (!this.done && this.buffer && !discard) this.forward(this.buffer)
     this.done = true
     this.buffer = ''
   }
@@ -87,7 +66,7 @@ export class PidLineFilter {
 
 /** Remove the wrapper's PID line from captured stderr. */
 export function stripPidLine(stderr: string): string {
-  return stderr.replace(PID_LINE, '')
+  return stderr.replace(PID_LINE, '$1')
 }
 
 /** Turn a failed `docker exec` (the wrapper never ran, or PHP could not start) into an actionable message. */
@@ -126,10 +105,23 @@ const isDocker = (connection: Connection): connection is DockerConnection => con
 export interface DockerTransportOptions {
   /** Resolve the CLI path (tests inject a fake). Defaults to findDockerCli(). */
   findCli?(): string | null
+  /** Running containers, to find a compose service's container and for hints. Defaults to listDockerContainers(). */
+  listContainers?(): Promise<DockerContainer[]>
+}
+
+/** Hint listing a compose project's containers when `name` is a project name rather than a container. */
+async function composeHint(name: string, list: () => Promise<DockerContainer[]>): Promise<string> {
+  try {
+    const names = (await list()).filter((c) => c.composeProject === name).map((c) => c.name)
+    return names.length ? ` "${name}" is a compose project; its running containers are ${names.join(', ')}.` : ''
+  } catch {
+    return ''
+  }
 }
 
 export function createDockerTransport(options: DockerTransportOptions = {}): Transport {
   const findCli = options.findCli ?? (() => findDockerCli())
+  const list = options.listContainers ?? (() => listDockerContainers())
   return {
     id: 'docker',
 
@@ -140,40 +132,31 @@ export function createDockerTransport(options: DockerTransportOptions = {}): Tra
 
     async run(req: TransportRequest): Promise<TransportResult> {
       if (!isDocker(req.connection)) throw new Error('The Docker transport only runs Docker connections')
-      const conn = req.connection
       const docker = findCli()
       if (!docker) throw new Error(DOCKER_MISSING)
-
-      // Xdebug inside the container connects to whatever xdebug.client_host its php.ini sets.
-      const flags = phpFlags({ debug: Boolean(conn.debug) })
-      const stderr = new PidLineFilter(req.onStderr)
-      const result = await spawnStreaming(
-        { command: docker, args: dockerExecArgs(conn, flags), env: process.env },
-        {
-          input: req.script,
-          timeoutMs: req.timeoutMs,
-          signal: req.signal,
-          onStdout: req.onStdout,
-          onStderr: (chunk) => stderr.push(chunk),
-          onTerminate: () => {
-            if (stderr.pid !== null) killInContainer(docker, conn, stderr.pid)
-          }
+      let conn = req.connection
+      let attempt = await execute(docker, conn, req)
+      // A compose service recreated under another name (`down` + `up`, scaling…): run in its current container.
+      if (attempt.missingContainer && conn.compose) {
+        const current = await composeContainer(conn.compose.project, conn.compose.service, list)
+        if (current && current !== conn.container) {
+          conn = { ...conn, container: current }
+          attempt = await execute(docker, conn, req)
         }
-      )
-      stderr.flush()
-      if (result.spawnError) {
-        if (result.spawnError.code === 'ENOENT') throw new Error(DOCKER_MISSING)
-        throw new Error(`Could not start docker (${docker}): ${result.spawnError.message}`)
       }
-      const cleanStderr = stripPidLine(result.stderr)
+      const { result, stderr, pidSeen } = attempt
+      attempt.release()
       const stopped = result.timedOut || result.cancelled
       if (!stopped && result.exitCode !== 0) {
-        const failure = dockerFailure(conn, result.exitCode, cleanStderr, stderr.pid !== null)
-        if (failure && !result.stdout.trim()) throw new Error(failure)
+        const failure = dockerFailure(conn, result.exitCode, stderr, pidSeen)
+        if (failure && !result.stdout.trim()) {
+          if (attempt.missingContainer && !conn.compose) throw new Error(failure + (await composeHint(conn.container, list)))
+          throw new Error(failure)
+        }
       }
       const out: TransportResult = {
         stdout: result.stdout,
-        stderr: cleanStderr,
+        stderr,
         exitCode: result.exitCode,
         timedOut: result.timedOut,
         cancelled: result.cancelled
@@ -183,6 +166,60 @@ export function createDockerTransport(options: DockerTransportOptions = {}): Tra
       }
       return out
     }
+  }
+}
+
+interface Attempt {
+  result: ProcessResult
+  /** stderr without the PID line. */
+  stderr: string
+  pidSeen: boolean
+  /** Docker reported that the container does not exist (PHP never started). */
+  missingContainer: boolean
+  /** Pass on the stderr held back before PHP started (call once the attempt is kept). */
+  release(): void
+}
+
+/** One `docker exec` of the bundle. Rejects only when the CLI cannot be started. */
+async function execute(docker: string, conn: DockerConnection, req: TransportRequest): Promise<Attempt> {
+  // Xdebug inside the container connects to whatever xdebug.client_host its php.ini sets.
+  const flags = phpFlags({ debug: Boolean(conn.debug) })
+  const filter = new PidLineFilter(req.onStderr)
+  const result = await spawnStreaming(
+    { command: docker, args: dockerExecArgs(conn, flags), env: process.env },
+    {
+      input: req.script,
+      timeoutMs: req.timeoutMs,
+      signal: req.signal,
+      onStdout: req.onStdout,
+      onStderr: (chunk) => filter.push(chunk),
+      onTerminate: () => {
+        if (filter.pid !== null) killInContainer(docker, conn, filter.pid)
+      }
+    }
+  )
+  if (result.spawnError) {
+    filter.flush(true)
+    if (result.spawnError.code === 'ENOENT') throw new Error(DOCKER_MISSING)
+    throw new Error(`Could not start docker (${docker}): ${result.spawnError.message}`)
+  }
+  const pidSeen = filter.pid !== null
+  return {
+    result,
+    stderr: stripPidLine(result.stderr),
+    pidSeen,
+    missingContainer: !pidSeen && /No such container/i.test(result.stderr),
+    release: () => filter.flush()
+  }
+}
+
+/** Current container of a compose service (running ones first), or null. */
+async function composeContainer(project: string, service: string, list: () => Promise<DockerContainer[]>): Promise<string | null> {
+  try {
+    const found = (await list()).filter((c) => c.composeProject === project && c.composeService === service)
+    return found[0]?.name ?? null
+  } catch {
+    return null
   }
 }
 

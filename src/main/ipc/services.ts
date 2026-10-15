@@ -16,6 +16,7 @@ export {
   testConnection
 } from '../execution'
 export { listDockerContainers } from '../execution/dockerContainers'
+export { composeUp, readComposeProject } from '../execution/dockerCompose'
 export { loadShellPath } from '../env/shellPath'
 export { findPhpBinaries, inspectPhpBinary } from '../php/binaries'
 export { listHerdSites } from '../php/herd'

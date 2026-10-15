@@ -5,6 +5,7 @@ import {
   SCRATCH_CONNECTION_ID,
   type Connection,
   type ConnectionTestResult,
+  type DockerComposeProject,
   type DockerConnection,
   type DockerContainer
 } from '@shared/types'
@@ -267,16 +268,22 @@ export const useConnectionsStore = defineStore('connections', () => {
   }
 
   /**
-   * Save a Docker connection and mark it used. A stored connection to the same container, path and user is reused
-   * so opening the same container twice does not add a second recent entry.
+   * Save a Docker connection and mark it used. A stored connection to the same compose service, or to the same
+   * container, path and user, is reused so opening it twice does not add a second recent entry.
    */
   async function openDocker(input: DockerConnectionInput): Promise<DockerConnection> {
-    const same = (c: Connection): c is DockerConnection =>
-      isDockerConnection(c) && c.container === input.container && c.path === input.path && (c.user ?? '') === (input.user ?? '')
+    const same = (c: Connection): c is DockerConnection => {
+      if (!isDockerConnection(c)) return false
+      // Two compose connections are the same when they use the same service, whatever its container is now.
+      if (input.compose && c.compose) return c.compose.project === input.compose.project && c.compose.service === input.compose.service
+      return c.container === input.container && c.path === input.path && (c.user ?? '') === (input.user ?? '')
+    }
     const existing = input.id ? byId(input.id) : connections.value.find(same)
     const conn: DockerConnection = {
       ...(isDockerConnection(existing) ? existing : {}),
       ...input,
+      // Opening without a compose reference drops a stored one.
+      compose: input.compose,
       id: existing?.id ?? input.id ?? newDockerId(),
       type: 'docker',
       createdAt: existing?.createdAt || Date.now(),
@@ -288,6 +295,16 @@ export const useConnectionsStore = defineStore('connections', () => {
   /** Running containers for the Docker form. Rejects with main's message when Docker is unavailable. */
   function listContainers(): Promise<DockerContainer[]> {
     return api.invoke('docker:containers')
+  }
+
+  /** Compose project in a folder (null when it has no compose file). Rejects with main's message. */
+  function composeProject(dir: string): Promise<DockerComposeProject | null> {
+    return api.invoke('docker:composeProject', dir)
+  }
+
+  /** `docker compose up -d <service>`; resolves with the refreshed project. */
+  function composeUp(dir: string, service: string): Promise<DockerComposeProject> {
+    return api.invoke('docker:composeUp', dir, service)
   }
 
   async function save(conn: Connection): Promise<Connection> {
@@ -359,6 +376,8 @@ export const useConnectionsStore = defineStore('connections', () => {
     openLocal,
     openDocker,
     listContainers,
+    composeProject,
+    composeUp,
     pickDirectory,
     save,
     remove,

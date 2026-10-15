@@ -150,7 +150,7 @@ onMounted(() => {
               <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Container :size="20" /></span>
               <span class="min-w-0 flex-1">
                 <span class="block font-semibold text-fg">Open Docker container…</span>
-                <span class="block text-xs text-muted">Run code inside a running container with docker exec</span>
+                <span class="block text-xs text-muted">Run code in a running container or a service of a compose project</span>
               </span>
               <Kbd :accelerator="settings.accelerator('openDocker')" />
             </button>

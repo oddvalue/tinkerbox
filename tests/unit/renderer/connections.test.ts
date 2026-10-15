@@ -125,6 +125,21 @@ describe('Docker connections', () => {
     expect(other.id).not.toBe(conn.id)
   })
 
+  it('reuses the connection of the same compose service', async () => {
+    const connections = useConnectionsStore()
+    const compose = { project: 'tmstores', service: 'web', dir: '/home/jim/Projects/tmstores' }
+    const first = await connections.openDocker({ container: 'tmstores-web-1', path: '/home/tmstores/current', compose, name: 'tmstores' })
+    // The service was recreated: new container, same service.
+    const again = await connections.openDocker({ container: 'tmstores-web-2', path: '/home/tmstores/current', compose, name: 'tmstores' })
+    expect(again.id).toBe(first.id)
+    expect(again.container).toBe('tmstores-web-2')
+    const other = await connections.openDocker({ container: 'tmstores-web-2', path: '/home/tmstores/current', compose: { ...compose, service: 'worker' }, name: 'w' })
+    expect(other.id).not.toBe(first.id)
+    // Saving without a compose reference drops it.
+    const plain = await connections.openDocker({ id: first.id, container: 'tmstores-web-2', path: '/home/tmstores/current', name: 'tmstores' })
+    expect(plain.compose).toBeUndefined()
+  })
+
   it('lists running containers and passes the Docker error through', async () => {
     const container = { id: 'abc', name: 'app', image: 'php:8.4', workingDir: '/app', mounts: [], composeProject: '', composeService: '' }
     fake = fakeBridge({ 'docker:containers': () => [container] })

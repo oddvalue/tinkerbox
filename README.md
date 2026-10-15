@@ -222,6 +222,12 @@ such as a Laravel Sail or docker compose app service. Pick the container and Tin
 its working directory and the host folder from the matching bind mount. Each run is `docker exec -i <container> php`
 with the runner on stdin, so nothing is installed in the container or written to the project.
 
+**File → Open Docker Compose Project…** starts from a project folder instead. Tinkerbox reads its compose file
+(`compose.yaml`, `docker-compose.yml`, `COMPOSE_FILE` in `.env`…) with `docker compose config`, lists the services
+and suggests the one that runs your app. A stopped service can be started from the form (`docker compose up -d
+<service>`). The connection remembers the compose project and service, so it keeps working when the container is
+recreated under another name.
+
 - PHP binary: `php` on the container's PATH unless you set another one.
 - User: optional, for example `sail` or `www-data` when files must be written as that user.
 - Host folder: the folder on this machine that is mounted into the container. File links in the output open in your

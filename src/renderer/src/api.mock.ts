@@ -110,6 +110,10 @@ export function createMockBridge(platform: NodeJS.Platform): TinkerboxBridge {
     'php:inspect': () => null,
     'herd:sites': () => [],
     'docker:containers': () => [],
+    'docker:composeProject': () => null,
+    'docker:composeUp': () => {
+      throw new Error(MOCK_NOTICE)
+    },
     'sandbox:status': () => ({ ...sandbox }),
     'sandbox:install': () => ({ ...sandbox, error: MOCK_NOTICE }),
     'run:start': (request) => {

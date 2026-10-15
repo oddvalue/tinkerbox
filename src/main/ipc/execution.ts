@@ -4,6 +4,7 @@ import type { IntrospectRequest, LogReadRequest } from '../../shared/types'
 import { sendTo, type ShellContext } from './context'
 import {
   cancelRun,
+  composeUp,
   findPhpBinaries,
   inspectPhpBinary,
   introspectEnvironment,
@@ -13,11 +14,13 @@ import {
   listHerdSites,
   listLogs,
   projectPanels,
+  readComposeProject,
   readLog
 } from './services'
+import { isDirectorySync } from './connectionResolver'
 import { RunOwners, sanitizeRunRequest } from './runs'
 import { UserFacingError, type HandlerGroup } from './typed'
-import { connectionIdOrNull, int, nonEmptyStr, obj } from './validate'
+import { absPath, connectionIdOrNull, int, nonEmptyStr, obj } from './validate'
 
 function introspectRequest(raw: unknown, needsClass: boolean): IntrospectRequest {
   const r = obj(raw, 'request')
@@ -25,6 +28,21 @@ function introspectRequest(raw: unknown, needsClass: boolean): IntrospectRequest
   if (needsClass) req.className = nonEmptyStr(r.className, 'className', 500)
   if (r.force === true) req.force = true
   return req
+}
+
+/** Docker / compose failures (missing CLI, daemon down, invalid compose file…) are shown to the user as they are. */
+async function userFacing<T>(promise: Promise<T>): Promise<T> {
+  try {
+    return await promise
+  } catch (err) {
+    throw new UserFacingError(err instanceof Error ? err.message : String(err))
+  }
+}
+
+function projectFolder(raw: unknown): string {
+  const dir = absPath(raw)
+  if (!isDirectorySync(dir)) throw new UserFacingError(`${dir} is not a folder`)
+  return dir
 }
 
 /** PHP / Herd discovery, sandbox, running code, introspection, logs and panels (execution module E1). */
@@ -59,15 +77,16 @@ export function executionHandlers(ctx: ShellContext) {
       return ready(() => inspectPhpBinary(value))
     },
     'herd:sites': () => ready(() => listHerdSites()),
-    'docker:containers': () =>
-      ready(async () => {
-        try {
-          return await listDockerContainers()
-        } catch (err) {
-          // Missing CLI, daemon not running…: the form shows the message next to the container list.
-          throw new UserFacingError(err instanceof Error ? err.message : String(err))
-        }
-      }),
+    'docker:containers': () => ready(() => userFacing(listDockerContainers())),
+    'docker:composeProject': (_e, dir) => {
+      const folder = projectFolder(dir)
+      return ready(() => userFacing(readComposeProject(folder)))
+    },
+    'docker:composeUp': (_e, dir, service) => {
+      const folder = projectFolder(dir)
+      const name = nonEmptyStr(service, 'service', 255)
+      return ready(() => userFacing(composeUp(folder, name)))
+    },
 
     'sandbox:status': () => ctx.sandbox.refresh(),
     'sandbox:install': async () => {

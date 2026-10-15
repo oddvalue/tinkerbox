@@ -5,6 +5,7 @@ import type {
   Connection,
   ConnectionTestResult,
   CustomTheme,
+  DockerComposeProject,
   DockerContainer,
   EnvironmentInfo,
   HerdSite,
@@ -59,6 +60,10 @@ export interface InvokeChannels {
   'herd:sites': [[], HerdSite[]]
   /** Running containers (`docker ps` + `docker inspect`); rejects with an actionable message when Docker is unavailable. */
   'docker:containers': [[], DockerContainer[]]
+  /** The compose project in a folder; null when the folder has no compose file. Rejects when compose fails. */
+  'docker:composeProject': [[dir: string], DockerComposeProject | null]
+  /** `docker compose up -d <service>` in the folder; resolves with the refreshed project. */
+  'docker:composeUp': [[dir: string, service: string], DockerComposeProject]
 
   // Laravel Sandbox -------------------------------------------------------------------
   'sandbox:status': [[], SandboxStatus]
@@ -201,6 +206,7 @@ export const COMMANDS = [
   // Files / projects
   'openFolder',
   'openDocker',
+  'openDockerCompose',
   'openFile',
   'saveFile',
   'saveFileAs',
