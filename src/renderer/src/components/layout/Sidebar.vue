@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Bookmark, Bug, FileText, FolderOpen, History, Play, Settings, Square } from 'lucide-vue-next'
+import { Bookmark, Bug, Container, FileText, FolderOpen, History, Play, Server, Settings, Square } from 'lucide-vue-next'
 import { executeCommand } from '../../commands'
 import { useConnectionsStore } from '../../stores/connections'
 import { useSettingsStore } from '../../stores/settings'
@@ -12,7 +12,10 @@ import Spinner from '../common/Spinner.vue'
 import Tooltip from '../common/Tooltip.vue'
 import RecentFolders from './RecentFolders.vue'
 
-/** Left icon sidebar: Run, Open folder (+ recent folders on hover), History, Snippets, Logs … Settings. */
+/**
+ * Left icon sidebar: Run, Open folder (+ recent folders on hover), Open SSH server, Open Docker container, History,
+ * Snippets, Logs … Settings.
+ */
 const tabs = useTabsStore()
 const ui = useUiStore()
 const settings = useSettingsStore()
@@ -87,6 +90,24 @@ function openFolder(): void {
           <RecentFolders @done="close" @open-folder="openFolder" />
         </template>
       </Popover>
+      <IconButton
+        :icon="Server"
+        label="Open SSH server"
+        command="openSsh"
+        size="lg"
+        tooltip-placement="right"
+        :active="ui.modal === 'ssh'"
+        @click="executeCommand('openSsh')"
+      />
+      <IconButton
+        :icon="Container"
+        label="Open Docker container"
+        command="openDocker"
+        size="lg"
+        tooltip-placement="right"
+        :active="ui.modal === 'docker'"
+        @click="executeCommand('openDocker')"
+      />
       <IconButton
         :icon="History"
         label="History of your code executions"
