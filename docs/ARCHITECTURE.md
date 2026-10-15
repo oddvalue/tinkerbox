@@ -2,9 +2,9 @@
 
 Tinkerbox is an open-source desktop code runner for PHP and Laravel: write code in an editor, run it inside a
 project (booted by a framework driver) and inspect the result, dumps, queries and errors. Code runs on this
-machine with a local PHP binary.
+machine with a local PHP binary, or inside a running Docker container.
 
-> **Roadmap:** remote transports (SSH, Docker, …) via the Transport extension point (see §2.1).
+> **Roadmap:** more remote transports (SSH, Kubernetes, …) via the Transport extension point (see §2.1).
 
 The stack:
 
@@ -27,7 +27,7 @@ to deliver it to a PHP process's stdin and hand back stdout / stderr.
                                                          └──────────────┬───────────────────────┘
                        stdin:  <?php runner sources … \Tinkerbox\Runner::main(payload)
                                                                         ▼
-                         php  (local transport: a child process of the main process)
+                         php  (local transport: a child process; Docker transport: `docker exec -i` in a container)
                        stdout: …noise… \n{nonce}BEGIN\n{json}\n{nonce}END\n
 ```
 
@@ -401,15 +401,28 @@ packaged (read-only) app; else `<userData>/sandbox` (not installed yet). Implici
 Laravel Sandbox); `scratch` → local connection with `path: ''` (plain PHP). `null` → `defaultWorkingDirectory`
 setting (opened as a local project) → sandbox if installed → scratch.
 
-**Local transport** (`localTransport.ts`, the only built-in transport). Spawn `php` with `-d xdebug.mode=off -d display_errors=stderr`
+**Local transport** (`localTransport.ts`). Spawn `php` with `-d xdebug.mode=off -d display_errors=stderr`
 (or `-d xdebug.mode=debug -d xdebug.start_with_request=yes` when Xdebug step debugging is on for the project:
 `connection.debug`), `cwd = path ||
 os.tmpdir()`, Herd per-version ini env; write the bundle to stdin; stream stdout/stderr (emit `run:progress` for text
 outside the envelope); honor `timeoutMs` and `cancelRun` (kill the process group).
 
+**Docker transport** (`dockerTransport.ts`) runs `DockerConnection`s (`container`, `path` inside the container, optional
+`hostPath` and `user`). It spawns `docker exec -i [--user] [--workdir path] <container> sh -c '<wrapper>' php <flags>`
+with the bundle on stdin; the CLI is `docker` on PATH or in the usual install folders, or `TINKERBOX_DOCKER`.
+`payloadDefaults` sends the container path as `projectPath` and an empty `homePath`, so the runner uses the
+container's `$HOME`. Killing the local `docker exec` client does not stop PHP inside the container, so the wrapper
+prints its PID (also the process group, as `docker exec` starts a new session) on stderr before it `exec`s PHP. The
+transport strips that line, and when a run is cancelled, times out or hits the output limit, `spawnStreaming`'s
+`onTerminate` hook runs `kill -TERM -<pid>` (then `-KILL`) in the container. Docker errors from before PHP started
+(no such container, not running, daemon down, missing PHP) reject `run()` with an actionable message.
+`docker:containers` (`dockerContainers.ts`) lists running containers with `docker ps` + `docker inspect` so the
+connection form can prefill the path (working directory) and host folder (bind-mount source). "Open in editor" maps
+container paths below `path` into `hostPath` (`src/main/ipc/editorPaths.ts`).
+
 **Extension point: transports.** Execution goes through a small interface, so a transport for another target is a new
-file that calls `registerTransport()`; `runCode`, the data modes and the IPC layer do not change. Remote transports
-(SSH, Docker, …) are on the roadmap.
+file that calls `registerTransport()`; `runCode`, the data modes and the IPC layer do not change. Other remote
+transports (SSH, Kubernetes, …) are on the roadmap.
 
 ```ts
 // src/main/execution/transport.ts
@@ -435,7 +448,7 @@ export function transportFor(connection: Connection): Transport
   macOS dock recent folders (`app.addRecentDocument`). Windows: `autoHideMenuBar`.
 - Native menu (Tinkerbox/File/Edit/View/Run/Window/Help) built from `COMMAND_META` + `acceleratorFor()` honoring
   `settings.shortcuts`; items send `menu:command`; rebuilt when shortcuts change. `CmdOrCtrl+R` runs code (no reload role).
-- Persistence in `userData`: `settings.json`, `connections.json` (`{connections}`: local project folders), `snippets.json`,
+- Persistence in `userData`: `settings.json`, `connections.json` (`{connections}`: local project folders and Docker connections), `snippets.json`,
   `history.json` (cap `historyLimit`), `session.json`, `stats.json`, `window-state.json`. Atomic writes (temp +
   rename), debounced; corrupted JSON → backed up as `*.corrupt-<ts>.json`, defaults used, toast via event.
 - Isolated profile: `--user-data-dir=<dir>` (or `TINKERBOX_USER_DATA_DIR`) is applied with `app.setPath('userData')`

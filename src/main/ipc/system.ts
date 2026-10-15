@@ -35,9 +35,23 @@ export function systemHandlers(ctx: ShellContext) {
   const watchedSenders = new WeakSet<WebContents>()
 
   const projectDirFor = (connectionId: string | null): string => {
-    const dir = ctx.exec.resolveConnection(connectionId).path
-    if (!dir) throw new UserFacingError('This tab is not attached to a project folder.')
-    return dir
+    const conn = ctx.exec.resolveConnection(connectionId)
+    if (conn.type === 'docker') {
+      if (!conn.hostPath) throw new UserFacingError('Set a host folder for this Docker project to open it in your editor.')
+      return conn.hostPath
+    }
+    if (!conn.path) throw new UserFacingError('This tab is not attached to a project folder.')
+    return conn.path
+  }
+
+  /** Extra hint for files from a Docker project without a host folder. */
+  const dockerHint = (connectionId: unknown): string => {
+    try {
+      const conn = ctx.exec.resolveConnection(connectionIdOrNull(connectionId))
+      return conn.type === 'docker' && !conn.hostPath ? ' Set a host folder for this Docker project to open its files.' : ''
+    } catch {
+      return ''
+    }
   }
 
   return {
@@ -132,7 +146,7 @@ export function systemHandlers(ctx: ShellContext) {
         ctx.logger.warn('openInEditor: ', errorMessage(err))
       }
       if (!isAbsolute(local) || !existsSync(local)) {
-        throw new UserFacingError(`${raw} was not found on this computer.`)
+        throw new UserFacingError(`${raw} was not found on this computer.${dockerHint(connectionId)}`)
       }
       const integration = ctx.settings.get().editorIntegration
       const url = editorUrl(integration, local, lineNumber)

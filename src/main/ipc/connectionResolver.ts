@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs'
 import { basename } from 'node:path'
-import { SANDBOX_CONNECTION_ID, SCRATCH_CONNECTION_ID, type Connection, type Settings } from '../../shared/types'
+import { SANDBOX_CONNECTION_ID, SCRATCH_CONNECTION_ID, type Connection, type ConnectionBase, type Settings } from '../../shared/types'
 import { expandHome } from '../env/which'
 import { localConnectionId, normalizeLocalPath, type ConnectionsStore } from '../store/connections'
 
@@ -33,9 +33,11 @@ export function isDirectorySync(path: string): boolean {
  * Fields of a stored 'sandbox' / 'scratch' entry the user may customize (e.g. the PHP binary or Xdebug toggle of
  * the Default tab, saved through connections:save with that id).
  */
-function implicitOverrides(stored: Connection | undefined): Partial<Connection> {
+type ImplicitOverrides = Partial<Pick<ConnectionBase, 'phpBinary' | 'driver' | 'color' | 'debug' | 'lastUsedAt'>>
+
+function implicitOverrides(stored: Connection | undefined): ImplicitOverrides {
   if (!stored) return {}
-  const out: Partial<Connection> = {}
+  const out: ImplicitOverrides = {}
   if (stored.phpBinary) out.phpBinary = stored.phpBinary
   if (stored.driver) out.driver = stored.driver
   if (stored.color) out.color = stored.color

@@ -50,6 +50,8 @@ export interface ModalPropsMap {
   logs: { connectionId: string | null }
   panels: { connectionId: string | null }
   php: { connectionId: string | null }
+  /** New Docker connection (no `connectionId`) or edit an existing one. */
+  docker: { connectionId?: string }
   wrapped: { year?: number }
   share: { code: string; connectionId?: string | null }
   tablePreview: { value: DumpNode; title?: string }
@@ -71,6 +73,7 @@ export const MODAL_NAMES: readonly ModalName[] = [
   'logs',
   'panels',
   'php',
+  'docker',
   'wrapped',
   'share',
   'tablePreview',

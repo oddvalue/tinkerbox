@@ -163,6 +163,9 @@ const handlers: Record<CommandId, Handler> = {
     const conn = await connections.pickDirectory()
     if (conn) tabs.openProject(conn)
   },
+  openDocker: () => {
+    void useUiStore().openModal('docker', {})
+  },
   openFile: () => useTabsStore().openFile(),
   saveFile: async () => {
     if (requireCodeTab('save')) await useTabsStore().saveFile()

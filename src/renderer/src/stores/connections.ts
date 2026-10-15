@@ -1,9 +1,17 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { SANDBOX_CONNECTION_ID, SCRATCH_CONNECTION_ID, type Connection, type ConnectionTestResult } from '@shared/types'
+import {
+  SANDBOX_CONNECTION_ID,
+  SCRATCH_CONNECTION_ID,
+  type Connection,
+  type ConnectionTestResult,
+  type DockerConnection,
+  type DockerContainer
+} from '@shared/types'
 import { api } from '../api'
+import { uid } from '../utils/id'
 import { cloneJson } from '../utils/merge'
-import { basename } from '../utils/platform'
+import { basename, tildify } from '../utils/platform'
 import { useAppStore } from './app'
 import { useSettingsStore } from './settings'
 import { useUiStore } from './ui'
@@ -21,8 +29,40 @@ export function isImplicitConnection(id: string | null | undefined): boolean {
   return id === null || id === undefined || id === SANDBOX_CONNECTION_ID || id === SCRATCH_CONNECTION_ID
 }
 
+export function isDockerConnection(conn: Connection | null | undefined): conn is DockerConnection {
+  return conn?.type === 'docker'
+}
+
+/** Where a connection runs, for display: "~/code/shop", "app:/var/www/html" or "app (plain PHP)". */
+export function connectionSubtitle(conn: Connection, home?: string): string {
+  if (isDockerConnection(conn)) return conn.path ? `${conn.container}:${conn.path}` : `${conn.container} (plain PHP)`
+  return tildify(conn.path, home)
+}
+
 /**
- * Local project connections (= recent folders) plus the implicit "Default" (Laravel Sandbox) and "PHP" (plain
+ * Folder on this machine for a connection: the project folder of a local one, the optional `hostPath` of a Docker
+ * one ('' when unset). With `inner` (a path inside the container) it maps that path below `path` to `hostPath`.
+ */
+export function hostPathOf(conn: Connection | null | undefined, inner?: string): string {
+  if (!conn) return ''
+  if (!isDockerConnection(conn)) return inner || conn.path
+  const host = conn.hostPath?.trim() ?? ''
+  if (!host || !inner) return host
+  const base = conn.path.replace(/\/+$/, '')
+  if (!base || inner === base) return host
+  if (!inner.startsWith(`${base}/`)) return ''
+  return host.replace(/[\\/]+$/, '') + inner.slice(base.length)
+}
+
+/** Fields of a Docker connection the form fills in; the store adds id, type and timestamps. */
+export type DockerConnectionInput = Omit<DockerConnection, 'id' | 'type' | 'createdAt' | 'lastUsedAt'> & { id?: string }
+
+function newDockerId(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? `docker-${crypto.randomUUID()}` : uid('docker')
+}
+
+/**
+ * Project connections: local folders and Docker containers (= recent projects) plus the implicit "Default" (Laravel Sandbox) and "PHP" (plain
  * PHP) connections. A tab's `connectionId` null means "default": Default Working Directory → Sandbox → PHP.
  */
 export const useConnectionsStore = defineStore('connections', () => {
@@ -68,10 +108,10 @@ export const useConnectionsStore = defineStore('connections', () => {
 
   watch(configuredDefaultDirectory, () => void checkDefaultDirectory())
 
-  /** Recent project folders, most recent first (plain PHP / sandbox entries excluded). */
+  /** Recent projects (folders and containers), most recent first (local plain PHP / sandbox entries excluded). */
   const recent = computed(() =>
     connections.value
-      .filter((c) => c.path !== '' && !isImplicitConnection(c.id) && !!c.lastUsedAt)
+      .filter((c) => (c.type === 'docker' || c.path !== '') && !isImplicitConnection(c.id) && !!c.lastUsedAt)
       .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))
   )
 
@@ -80,9 +120,26 @@ export const useConnectionsStore = defineStore('connections', () => {
     return connections.value.find((c) => c.id === id)
   }
 
+  /** Local connection of a folder on this machine (Docker paths live inside a container and never match). */
   function findByPath(path: string): Connection | undefined {
     const wanted = path.replace(/[\\/]+$/, '')
-    return connections.value.find((c) => c.path !== '' && c.path.replace(/[\\/]+$/, '') === wanted)
+    return connections.value.find((c) => c.type === 'local' && c.path !== '' && c.path.replace(/[\\/]+$/, '') === wanted)
+  }
+
+  function isDocker(id: string | null | undefined): boolean {
+    return isDockerConnection(byId(id))
+  }
+
+  /** Display subtitle of a stored connection ('' for the implicit ones). */
+  function subtitle(id: string | null | undefined): string {
+    const conn = byId(id)
+    return conn ? connectionSubtitle(conn, useAppStore().homeDir) : ''
+  }
+
+  /** Folder on this machine behind a tab's connection ('' for a Docker connection without `hostPath`). */
+  function hostPath(id: string | null | undefined): string {
+    const conn = byId(effectiveId(id))
+    return conn ? hostPathOf(conn) : path(id)
   }
 
   /** Label of what a `null` connection resolves to: the Default Working Directory, "Default" or "PHP". */
@@ -209,6 +266,30 @@ export const useConnectionsStore = defineStore('connections', () => {
     }
   }
 
+  /**
+   * Save a Docker connection and mark it used. A stored connection to the same container, path and user is reused
+   * so opening the same container twice does not add a second recent entry.
+   */
+  async function openDocker(input: DockerConnectionInput): Promise<DockerConnection> {
+    const same = (c: Connection): c is DockerConnection =>
+      isDockerConnection(c) && c.container === input.container && c.path === input.path && (c.user ?? '') === (input.user ?? '')
+    const existing = input.id ? byId(input.id) : connections.value.find(same)
+    const conn: DockerConnection = {
+      ...(isDockerConnection(existing) ? existing : {}),
+      ...input,
+      id: existing?.id ?? input.id ?? newDockerId(),
+      type: 'docker',
+      createdAt: existing?.createdAt || Date.now(),
+      lastUsedAt: Date.now()
+    }
+    return (await save(conn)) as DockerConnection
+  }
+
+  /** Running containers for the Docker form. Rejects with main's message when Docker is unavailable. */
+  function listContainers(): Promise<DockerContainer[]> {
+    return api.invoke('docker:containers')
+  }
+
   async function save(conn: Connection): Promise<Connection> {
     const saved = await api.invoke('connections:save', cloneJson(conn))
     upsert(saved)
@@ -265,6 +346,9 @@ export const useConnectionsStore = defineStore('connections', () => {
     checkDefaultDirectory,
     byId,
     findByPath,
+    isDocker,
+    subtitle,
+    hostPath,
     label,
     effectiveId,
     path,
@@ -273,6 +357,8 @@ export const useConnectionsStore = defineStore('connections', () => {
     isDebugging,
     load,
     openLocal,
+    openDocker,
+    listContainers,
     pickDirectory,
     save,
     remove,

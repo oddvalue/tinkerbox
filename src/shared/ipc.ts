@@ -5,6 +5,7 @@ import type {
   Connection,
   ConnectionTestResult,
   CustomTheme,
+  DockerContainer,
   EnvironmentInfo,
   HerdSite,
   HistoryEntry,
@@ -38,7 +39,7 @@ export interface InvokeChannels {
   'settings:reset': [[], Settings]
 
   // Connections ---------------------------------------------------------------
-  /** Local project connections (= recent folders), most recent first. */
+  /** Project connections (local folders and Docker containers), most recent first. */
   'connections:list': [[], Connection[]]
   /** Create or update (by id). Returns the saved connection. */
   'connections:save': [[connection: Connection], Connection]
@@ -56,6 +57,8 @@ export interface InvokeChannels {
   /** Validate a binary path or Herd alias; returns null when it is not a working PHP CLI. */
   'php:inspect': [[binary: string], PhpBinary | null]
   'herd:sites': [[], HerdSite[]]
+  /** Running containers (`docker ps` + `docker inspect`); rejects with an actionable message when Docker is unavailable. */
+  'docker:containers': [[], DockerContainer[]]
 
   // Laravel Sandbox -------------------------------------------------------------------
   'sandbox:status': [[], SandboxStatus]
@@ -197,6 +200,7 @@ export const COMMANDS = [
   'showWelcome',
   // Files / projects
   'openFolder',
+  'openDocker',
   'openFile',
   'saveFile',
   'saveFileAs',

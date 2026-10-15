@@ -69,7 +69,7 @@ describe('modals', () => {
   })
 
   it('knows every modal name', () => {
-    expect(MODAL_NAMES).toHaveLength(15)
+    expect(MODAL_NAMES).toHaveLength(16)
   })
 })
 

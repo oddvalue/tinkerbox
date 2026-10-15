@@ -19,7 +19,7 @@ import type { LogEntry, LogListing } from '@shared/types'
 import { api } from '../../../api'
 import { executeCommand } from '../../../commands'
 import { useAppStore } from '../../../stores/app'
-import { useConnectionsStore } from '../../../stores/connections'
+import { hostPathOf, isDockerConnection, useConnectionsStore } from '../../../stores/connections'
 import { useUiStore } from '../../../stores/ui'
 import { formatBytes, pluralize, relativeTime } from '../../../utils/format'
 import { fileManagerName, modKeyLabel, tildify } from '../../../utils/platform'
@@ -93,6 +93,12 @@ let pollInFlight = false
 
 const root = computed(() => listing.value?.root || '')
 const rootDisplay = computed(() => tildify(root.value || projectPath.value, app.homeDir))
+/** Log folder on this machine. A Docker project's logs live in the container; only a host folder can be revealed. */
+const revealTarget = computed(() => {
+  const target = root.value || projectPath.value
+  const conn = connections.resolve(props.connectionId)
+  return isDockerConnection(conn) ? hostPathOf(conn, target) : target
+})
 const files = computed(() => listing.value?.files ?? [])
 const groups = computed(() => groupLogFiles(files.value))
 const selectedFile = computed(() => files.value.find((f) => f.path === selected.value) ?? null)
@@ -269,7 +275,7 @@ async function copyEntry(entry: LogEntry): Promise<void> {
 }
 
 async function revealRoot(): Promise<void> {
-  const target = root.value || projectPath.value
+  const target = revealTarget.value
   if (!target) return
   try {
     await api.invoke('shell:revealInFinder', target)
@@ -409,10 +415,11 @@ onBeforeUnmount(() => {
                 {{ selectedFile?.name ?? '—' }}
               </span>
               <IconButton
+                v-if="revealTarget || !connections.isDocker(connectionId)"
                 :icon="FolderSearch"
                 :label="`Open log folder in ${fileManagerName()}`"
                 size="sm"
-                :disabled="!root && !projectPath"
+                :disabled="!revealTarget"
                 @click="revealRoot"
               />
             </div>

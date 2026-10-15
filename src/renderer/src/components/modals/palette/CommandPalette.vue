@@ -5,6 +5,7 @@ import {
   Box,
   Code,
   Command,
+  Container,
   FolderOpen,
   Folder,
   Globe,
@@ -17,12 +18,12 @@ import {
 import { WELCOME_CODE } from '@shared/defaults'
 import { commandList, commandShortcut, executeCommand } from '@/commands'
 import { useAppStore } from '@/stores/app'
-import { useConnectionsStore } from '@/stores/connections'
+import { connectionSubtitle, useConnectionsStore } from '@/stores/connections'
 import { useSnippetsStore } from '@/stores/snippets'
 import { useTabsStore } from '@/stores/tabs'
 import { useUiStore } from '@/stores/ui'
 import { highlightSegments } from '@/utils/fuzzy'
-import { modKeyLabel, tildify } from '@/utils/platform'
+import { modKeyLabel } from '@/utils/platform'
 import Kbd from '../../common/Kbd.vue'
 import Modal from '../../common/Modal.vue'
 import { snippetOpenConnection, snippetProjectId } from '../snippets/snippets'
@@ -68,6 +69,7 @@ const ICONS: Record<string, Component> = {
   example: Code,
   command: Command,
   folder: Folder,
+  docker: Container,
   snippet: Bookmark,
   herd: Globe
 }
@@ -150,9 +152,9 @@ const sources = computed<PaletteSources>(() => {
     key: `folder:${conn.id}`,
     group: 'folders',
     title: conn.name,
-    description: tildify(conn.path, app.homeDir),
-    keywords: conn.path,
-    icon: 'folder',
+    description: connectionSubtitle(conn, app.homeDir),
+    keywords: conn.type === 'docker' ? `${conn.container} ${conn.path} docker` : conn.path,
+    icon: conn.type === 'docker' ? 'docker' : 'folder',
     color: connections.color(conn.id),
     supportsNewTab: true,
     run: ({ newTab }) => later(() => tabs.openProject(conn, { newTab }))

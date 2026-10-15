@@ -92,7 +92,7 @@ export function createMockBridge(platform: NodeJS.Platform): TinkerboxBridge {
     },
     'connections:openLocal': (path) => {
       const now = Date.now()
-      const existing = connections.find((c) => c.path === path)
+      const existing = connections.find((c) => c.type === 'local' && c.path === path)
       const conn: Connection = existing
         ? { ...existing, lastUsedAt: now }
         : { id: `local-${Math.random().toString(16).slice(2, 10)}`, name: path.split(/[\\/]/).pop() || path, type: 'local', path, createdAt: now, lastUsedAt: now }
@@ -109,6 +109,7 @@ export function createMockBridge(platform: NodeJS.Platform): TinkerboxBridge {
     'php:binaries': () => [],
     'php:inspect': () => null,
     'herd:sites': () => [],
+    'docker:containers': () => [],
     'sandbox:status': () => ({ ...sandbox }),
     'sandbox:install': () => ({ ...sandbox, error: MOCK_NOTICE }),
     'run:start': (request) => {

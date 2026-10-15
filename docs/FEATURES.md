@@ -1,6 +1,6 @@
 # Tinkerbox feature checklist
 
-> **Roadmap:** remote transports (SSH, Docker, …) via the Transport extension point (see `docs/ARCHITECTURE.md` §2.1).
+> **Roadmap:** more remote transports (SSH, Kubernetes, …) via the Transport extension point (see `docs/ARCHITECTURE.md` §2.1).
 
 Legend: the area codes in brackets refer to the source map in `docs/ARCHITECTURE.md`. `[x]` = implemented and
 verified end-to-end in the built app by `tests/e2e/smoke.mjs` (Playwright + Electron, real PHP, read-only Laravel
@@ -77,6 +77,7 @@ end-to-end; the note says why. *(account)* = needs a token supplied by the user.
 
 ## Projects
 - [x] F80 Open local project ⌘O + recent folders (also macOS dock menu) [E2, R1]
+- [ ] F81 Docker container connections: run code with `docker exec` in a running container (Sail, docker compose), container picker with path and host folder prefilled from `docker inspect`, stop/timeout kill PHP inside the container, open files through the host folder [E1, E2, R1, R4] — not covered by `tests/e2e/smoke.mjs` (needs a running container); `docker-transport.test.ts` uses a fake CLI, and runs against a real container when `TINKERBOX_TEST_DOCKER_CONTAINER` is set
 - [x] F92 Laravel Herd: PHP binaries & aliases, per-version php.ini env, Herd sites in Get started / Open Anything [E1, R1] — *Verified:* smoke (per-project Herd alias); `php-binaries.test.ts`, `herd-sites.test.ts`; built app: Herd sites listed
 
 ## History, snippets, logs, palette

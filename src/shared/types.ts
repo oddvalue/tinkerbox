@@ -9,13 +9,13 @@
 // ---------------------------------------------------------------------------
 // Connections
 //
-// SCOPE: this build executes code LOCALLY only — local projects, the Laravel Sandbox and
-// plain PHP. Remote targets (SSH, Docker, Kubernetes, Vapor, Laravel Cloud) are deferred and
-// will be added later as new `Connection` variants + execution transports (see
-// docs/ARCHITECTURE.md "Extension point: transports").
+// Local projects, the Laravel Sandbox and plain PHP run on this machine; Docker connections run
+// inside a running container (`docker exec`). Other remote targets (SSH, Kubernetes, Vapor, Laravel
+// Cloud) can be added as new `Connection` variants + execution transports (see docs/ARCHITECTURE.md
+// "Extension point: transports").
 // ---------------------------------------------------------------------------
 
-export type ConnectionType = 'local'
+export type ConnectionType = 'local' | 'docker'
 
 export interface ConnectionBase {
   id: string
@@ -40,8 +40,37 @@ export interface LocalConnection extends ConnectionBase {
   path: string
 }
 
-/** Union kept for future remote connection types (SSH, Docker…). */
-export type Connection = LocalConnection
+export interface DockerConnection extends ConnectionBase {
+  type: 'docker'
+  /** Name or id of a running container (`docker ps`). */
+  container: string
+  /** Absolute project directory inside the container. '' => plain PHP in the container. */
+  path: string
+  /**
+   * Optional folder on this machine that holds the same files (the bind-mount source). Used to open files in
+   * the editor and to read per-project snippets; '' => none.
+   */
+  hostPath?: string
+  /** `docker exec --user`; empty => the container's default user. */
+  user?: string
+}
+
+export type Connection = LocalConnection | DockerConnection
+
+/** A running container offered in the Docker connection form (`docker:containers`). */
+export interface DockerContainer {
+  id: string
+  /** Container name without the leading slash. */
+  name: string
+  image: string
+  /** Config.WorkingDir, '' when unset. */
+  workingDir: string
+  /** Bind mounts (host source → container destination). */
+  mounts: Array<{ source: string; destination: string }>
+  /** `com.docker.compose.project` / `com.docker.compose.service` labels, '' when absent. */
+  composeProject: string
+  composeService: string
+}
 
 /** Placeholder sent to the renderer instead of stored secrets. Saving it back keeps the old secret. */
 export const SECRET_MASK = '••••••••'

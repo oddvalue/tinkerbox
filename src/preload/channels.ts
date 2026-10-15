@@ -22,6 +22,7 @@ export const INVOKE_CHANNELS = [
   'php:binaries',
   'php:inspect',
   'herd:sites',
+  'docker:containers',
   'sandbox:status',
   'sandbox:install',
   'run:start',

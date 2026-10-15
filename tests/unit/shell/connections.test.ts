@@ -246,3 +246,54 @@ describe('connection resolver (ExecutionContext.resolveConnection)', () => {
     expect(() => resolve('missing')).toThrow(/no longer available/)
   })
 })
+
+describe('Docker connections', () => {
+  const docker = { type: 'docker', id: 'd1', name: 'shop', container: 'shop-laravel.test-1', path: '/var/www/html/', createdAt: 5 }
+
+  it('validates the container, the container path, the host folder and the user', () => {
+    expect(sanitizeConnection({ ...docker, hostPath: '/home/me/shop', user: 'sail', phpBinary: '/usr/local/bin/php', lastUsedAt: 9 })).toEqual({
+      id: 'd1',
+      name: 'shop',
+      type: 'docker',
+      container: 'shop-laravel.test-1',
+      path: '/var/www/html',
+      hostPath: '/home/me/shop',
+      user: 'sail',
+      phpBinary: '/usr/local/bin/php',
+      createdAt: 5,
+      lastUsedAt: 9
+    })
+    expect(sanitizeConnection({ type: 'docker', container: 'app', path: '' })).toMatchObject({ name: 'app', path: '', id: expect.stringMatching(/^docker-/) })
+    expect(() => sanitizeConnection({ ...docker, container: '' })).toThrow(/container name/)
+    expect(() => sanitizeConnection({ ...docker, container: '--privileged' })).toThrow(TypeError)
+    expect(() => sanitizeConnection({ ...docker, path: 'var/www' })).toThrow(/must be absolute/)
+    expect(() => sanitizeConnection({ ...docker, hostPath: 'relative' })).toThrow(/Host folder/)
+    expect(() => sanitizeConnection({ ...docker, user: 'root; rm -rf /' })).toThrow(/user/)
+  })
+
+  it('keeps the container path as POSIX on Windows hosts and survives a reload', () => {
+    const { store, file } = makeStore({ platform: 'win32' })
+    expect(store.save(docker).path).toBe('/var/www/html')
+    store.flushSync()
+    expect(makeStore({ file, platform: 'win32' }).store.get('d1')).toMatchObject({ type: 'docker', container: 'shop-laravel.test-1', path: '/var/www/html' })
+  })
+
+  it('is never matched by local folder lookups and stays out of the native recent folders', () => {
+    const { store } = makeStore()
+    store.save({ ...docker, lastUsedAt: 2000 })
+    expect(store.findLocalByPath('/var/www/html')).toBeUndefined()
+    const local = store.openLocal('/var/www/html')
+    expect(local.type).toBe('local')
+    expect(local.id).not.toBe('d1')
+    expect(store.recentFolders().map((c) => c.id)).toEqual([local.id])
+  })
+
+  it('survives clearing the recents (its container settings cannot be recreated)', () => {
+    const { store } = makeStore()
+    store.save({ ...docker, lastUsedAt: 2000 })
+    store.openLocal('/srv/plain')
+    store.clearRecents()
+    expect(store.list().map((c) => c.id)).toEqual(['d1'])
+    expect(store.get('d1')?.lastUsedAt).toBeUndefined()
+  })
+})

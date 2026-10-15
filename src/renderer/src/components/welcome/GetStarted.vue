@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Box,
   Code,
+  Container,
   Folder,
   FolderOpen,
   Globe,
@@ -18,7 +19,7 @@ import { useAppStore } from '../../stores/app'
 import { useConnectionsStore } from '../../stores/connections'
 import { useSettingsStore } from '../../stores/settings'
 import { useTabsStore } from '../../stores/tabs'
-import { basename, modKeyLabel, tildify } from '../../utils/platform'
+import { basename, modKeyLabel } from '../../utils/platform'
 import Button from '../common/Button.vue'
 import Kbd from '../common/Kbd.vue'
 import Spinner from '../common/Spinner.vue'
@@ -143,6 +144,20 @@ onMounted(() => {
             <button
               type="button"
               class="group flex items-center gap-3 rounded-xl border border-transparent p-3 text-left transition-colors hover:border-line hover:bg-app-alt/60"
+              data-testid="open-docker"
+              @click="executeCommand('openDocker')"
+            >
+              <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Container :size="20" /></span>
+              <span class="min-w-0 flex-1">
+                <span class="block font-semibold text-fg">Open Docker container…</span>
+                <span class="block text-xs text-muted">Run code inside a running container with docker exec</span>
+              </span>
+              <Kbd :accelerator="settings.accelerator('openDocker')" />
+            </button>
+
+            <button
+              type="button"
+              class="group flex items-center gap-3 rounded-xl border border-transparent p-3 text-left transition-colors hover:border-line hover:bg-app-alt/60"
               @click="plainPhp"
             >
               <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Terminal :size="20" /></span>
@@ -189,14 +204,15 @@ onMounted(() => {
               <button
                 type="button"
                 class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent-soft"
-                :title="conn.path"
+                :title="connections.subtitle(conn.id)"
                 @click="openRecent(conn.id)"
               >
                 <span class="size-2 shrink-0 rounded-full" :style="{ backgroundColor: connections.color(conn.id) }" />
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-[13px] font-semibold text-fg">{{ conn.name }}</span>
-                  <span class="block truncate font-mono text-[11px] text-muted">{{ tildify(conn.path, app.homeDir) }}</span>
+                  <span class="block truncate font-mono text-[11px] text-muted">{{ connections.subtitle(conn.id) }}</span>
                 </span>
+                <Container v-if="conn.type === 'docker'" :size="14" class="shrink-0 text-muted" aria-label="Docker" />
               </button>
             </li>
           </ul>

@@ -36,6 +36,7 @@ export const COMMAND_META: Record<CommandId, CommandMeta> = {
   showWelcome: { title: 'Show Get Started', group: 'Tabs', accelerator: '', menu: true },
 
   openFolder: { title: 'Open Local Project…', group: 'File', accelerator: 'CmdOrCtrl+O', menu: true },
+  openDocker: { title: 'Open Docker Container…', group: 'File', accelerator: '', menu: true },
   openFile: { title: 'Open File…', group: 'File', accelerator: 'CmdOrCtrl+Shift+O', menu: true },
   saveFile: { title: 'Save File', group: 'File', accelerator: 'CmdOrCtrl+S', menu: true },
   saveFileAs: { title: 'Save File As…', group: 'File', accelerator: 'CmdOrCtrl+Shift+S', menu: true },

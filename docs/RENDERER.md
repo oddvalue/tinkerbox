@@ -21,7 +21,7 @@ src/renderer/src/
   components/ModalHost.vue
   components/editor  EditorPane + Monaco integration (with monaco/)
   components/output  Cards / CLI output, Table Preview, Object Graph, HTML Preview
-  components/modals  settings, palette, history, snippets, themes, logs, panels, php, wrapped, share
+  components/modals  settings, palette, history, snippets, themes, logs, panels, php, docker, wrapped, share
 ```
 
 ## Startup & lifecycle
@@ -115,7 +115,7 @@ actions `load()`, `loadInfo()`, `refreshSandbox()`, `installSandbox()` (progress
 outcome), `loadHerdSites()`. `guessHome(path)` helper.
 
 ### `useConnectionsStore()`
-Connections = local project folders (recent folders) + the implicit `'sandbox'` ("Default") and `'scratch'` ("PHP").
+Connections = local project folders and Docker containers (recent projects) + the implicit `'sandbox'` ("Default") and `'scratch'` ("PHP").
 A tab's `connectionId: null` = default: Default Working Directory → Sandbox (installed) → PHP.
 
 | member | description |
@@ -124,7 +124,8 @@ A tab's `connectionId: null` = default: Default Working Directory → Sandbox (i
 | `recent: Connection[]` | recent project folders, newest first (implicit + cleared entries excluded) |
 | `defaultConnectionLabel: string` | label of what `null` resolves to: DWD folder name, 'Default' or 'PHP' |
 | `label(id \| null): string` | 'Default' (sandbox; 'PHP' when not installed), 'PHP' (scratch), project name |
-| `byId(id)`, `findByPath(path)` | lookups |
+| `byId(id)`, `findByPath(path)` | lookups (`findByPath` matches local folders only) |
+| `isDocker(id)`, `subtitle(id)`, `hostPath(id)` | Docker check; display subtitle (`~/code/shop`, `app:/var/www/html`, `app (plain PHP)`); folder on this machine ('' for Docker without `hostPath`) |
 | `effectiveId(id \| null): string \| null` | concrete id behind a tab connection (null when the DWD has no stored entry) |
 | `path(id \| null): string` | project directory ('' = plain PHP) |
 | `color(id \| null): string \| undefined` | badge color (explicit `color`, else stable per project; undefined for defaults) |
@@ -132,9 +133,11 @@ A tab's `connectionId: null` = default: Default Working Directory → Sandbox (i
 | `isDebugging(id)` | Xdebug toggle state |
 | `load()`, `openLocal(dir)`, `pickDirectory(title?)` | folder dialog → openLocal (null when cancelled) |
 | `save(conn)`, `remove(id)` (alias `delete`), `test(conn)`, `touch(id)`, `clearRecents()` | |
+| `openDocker(input)`, `listContainers()` | save a Docker connection as used (reuses one with the same container, path and user); running containers (`docker:containers`) |
 | `toggleDebug(id \| null): Promise<boolean>` | flips `debug` on the project behind the tab |
 
-`colorForName(name)`, `isImplicitConnection(id)` are exported helpers.
+`colorForName(name)`, `isImplicitConnection(id)`, `isDockerConnection(conn)`, `connectionSubtitle(conn, home?)`,
+`hostPathOf(conn, innerPath?)` are exported helpers.
 
 ### `useTabsStore()`
 State: `tabs: TabState[]`, `activeTabId`, and per-tab runtime maps (keyed by tab id, **not persisted**):
@@ -230,6 +233,7 @@ Modal components declare the props below with `defineProps`, use `<Modal>` from 
 | `logs` | modals/logs/LogsModal.vue | `{ connectionId: string \| null }` |
 | `panels` | modals/panels/PanelsModal.vue | `{ connectionId: string \| null }` |
 | `php` | modals/php/PhpSettingsModal.vue | `{ connectionId: string \| null }` |
+| `docker` | modals/docker/DockerConnectionModal.vue | `{ connectionId?: string }` (new connection, or edit a stored one) |
 | `wrapped` | modals/wrapped/WrappedModal.vue | `{ year?: number }` |
 | `share` | modals/share/ShareGistModal.vue | `{ code: string; connectionId?: string \| null }` |
 | `tablePreview` | output/TablePreviewModal.vue | `{ value: DumpNode; title?: string }` |
@@ -257,7 +261,7 @@ commands — or every command when `api.isMock`), palette and buttons. Plain-key
 modal / context menu / popover is open or in form fields. While a modal is open only `closeTab`, `commandPalette`,
 `openSettings`, `showHistory`, `showSnippets`, `showLogs`, `zenMode`, `run` pass the renderer listener.
 
-Notable implementations: `closeTab` closes the top modal first; `showHistory/showSnippets/showLogs/openSettings/
+Notable implementations: `openDocker` opens the `docker` modal; `closeTab` closes the top modal first; `showHistory/showSnippets/showLogs/openSettings/
 commandPalette` toggle; `toggleToolbar` and `toggleSidebar` both toggle the icon sidebar (`showToolbar`, the
 "toolbar" setting; ⌘\ is the "purist mode" alias); `zenMode` = `ui.toggleZen()`; `zoomIn/zoomOut/resetZoom` change
 `editorFontSize` (8–40) and `outputFontSize` (8–32); `toggleFullscreen` uses the HTML fullscreen API;

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Box, Folder, FolderPlus, Trash2 } from 'lucide-vue-next'
+import { Box, Container, Folder, FolderPlus, Trash2 } from 'lucide-vue-next'
+import { executeCommand } from '../../commands'
 import { useAppStore } from '../../stores/app'
 import { useConnectionsStore } from '../../stores/connections'
 import { useSettingsStore } from '../../stores/settings'
 import { useTabsStore } from '../../stores/tabs'
 import { formatAccelerator } from '../../utils/accelerator'
-import { platform, tildify } from '../../utils/platform'
+import { platform } from '../../utils/platform'
 
 /** Recent folders list (sidebar popover). Click opens the project in the current tab, ⌘/Ctrl-click in a new one. */
 const emit = defineEmits<{ done: []; 'open-folder': [] }>()
@@ -30,6 +31,11 @@ function openSandbox(event: MouseEvent): void {
   emit('done')
 }
 
+function openDocker(): void {
+  emit('done')
+  void executeCommand('openDocker')
+}
+
 async function clear(): Promise<void> {
   await connections.clearRecents()
 }
@@ -39,14 +45,26 @@ async function clear(): Promise<void> {
   <div class="w-[320px] text-[13px]">
     <div class="flex items-center justify-between px-3.5 pt-3 pb-2">
       <span class="text-[11px] font-bold tracking-wider text-muted uppercase">Recent folders</span>
-      <button
-        type="button"
-        class="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs font-semibold text-accent hover:bg-accent-soft"
-        @click="emit('open-folder')"
-      >
-        <FolderPlus :size="13" /> Open folder…
-        <span v-if="openShortcut" class="font-normal text-muted">{{ openShortcut }}</span>
-      </button>
+      <div class="flex items-center gap-0.5">
+        <button
+          type="button"
+          class="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs font-semibold text-accent hover:bg-accent-soft"
+          @click="emit('open-folder')"
+        >
+          <FolderPlus :size="13" /> Open folder…
+          <span v-if="openShortcut" class="font-normal text-muted">{{ openShortcut }}</span>
+        </button>
+        <button
+          type="button"
+          class="flex items-center rounded-md px-1.5 py-1 text-accent hover:bg-accent-soft"
+          title="Open Docker container…"
+          aria-label="Open Docker container"
+          data-testid="recent-open-docker"
+          @click="openDocker"
+        >
+          <Container :size="13" />
+        </button>
+      </div>
     </div>
     <ul class="max-h-[360px] overflow-auto px-1.5 pb-1.5">
       <li v-if="app.sandboxInstalled">
@@ -62,18 +80,19 @@ async function clear(): Promise<void> {
         <button
           type="button"
           class="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-accent-soft"
-          :title="conn.path"
+          :title="connections.subtitle(conn.id)"
           @click="open(conn.id, $event)"
         >
           <span
             class="flex size-7 shrink-0 items-center justify-center rounded-md"
             :style="{ color: connections.color(conn.id), backgroundColor: `color-mix(in srgb, ${connections.color(conn.id)} 14%, transparent)` }"
           >
-            <Folder :size="15" />
+            <Container v-if="conn.type === 'docker'" :size="15" />
+            <Folder v-else :size="15" />
           </span>
           <span class="min-w-0 flex-1">
             <span class="block truncate font-semibold text-fg">{{ conn.name }}</span>
-            <span class="block truncate text-xs text-muted">{{ tildify(conn.path, app.homeDir) }}</span>
+            <span class="block truncate text-xs text-muted">{{ connections.subtitle(conn.id) }}</span>
           </span>
         </button>
       </li>

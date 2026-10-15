@@ -284,7 +284,7 @@ watch(
           v-else-if="badgeColor(tab)"
           class="size-2 shrink-0 rounded-full"
           :style="{ backgroundColor: badgeColor(tab) }"
-          :title="connections.label(tab.connectionId)"
+          :title="connections.label(tab.connectionId) + (connections.isDocker(tab.connectionId) ? ' (Docker)' : '')"
         />
         <Eye v-if="tabs.watching[tab.id]" :size="13" class="shrink-0 text-accent" />
         <input

@@ -32,6 +32,11 @@ export interface StreamOptions {
   maxOutputBytes?: number
   /** Delay between SIGTERM and SIGKILL (default 2000 ms). */
   killGraceMs?: number
+  /**
+   * Called once when the process is being stopped (cancel, timeout or output limit), before the local kill.
+   * Transports whose child is only a client for a process elsewhere (`docker exec`) stop that process here.
+   */
+  onTerminate?(): void
 }
 
 export interface ProcessResult {
@@ -174,6 +179,11 @@ export function spawnStreaming(spec: SpawnSpec, options: StreamOptions = {}): Pr
     const terminate = (): void => {
       if (terminating) return
       terminating = true
+      try {
+        options.onTerminate?.()
+      } catch {
+        /* best effort: the local kill below still runs */
+      }
       killProcessTree(child, 'SIGTERM')
       const pid = child.pid
       const escalate = setTimeout(() => {

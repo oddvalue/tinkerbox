@@ -9,13 +9,14 @@ import {
   introspectEnvironment,
   introspectMembers,
   invalidateCaches,
+  listDockerContainers,
   listHerdSites,
   listLogs,
   projectPanels,
   readLog
 } from './services'
 import { RunOwners, sanitizeRunRequest } from './runs'
-import type { HandlerGroup } from './typed'
+import { UserFacingError, type HandlerGroup } from './typed'
 import { connectionIdOrNull, int, nonEmptyStr, obj } from './validate'
 
 function introspectRequest(raw: unknown, needsClass: boolean): IntrospectRequest {
@@ -58,6 +59,15 @@ export function executionHandlers(ctx: ShellContext) {
       return ready(() => inspectPhpBinary(value))
     },
     'herd:sites': () => ready(() => listHerdSites()),
+    'docker:containers': () =>
+      ready(async () => {
+        try {
+          return await listDockerContainers()
+        } catch (err) {
+          // Missing CLI, daemon not running…: the form shows the message next to the container list.
+          throw new UserFacingError(err instanceof Error ? err.message : String(err))
+        }
+      }),
 
     'sandbox:status': () => ctx.sandbox.refresh(),
     'sandbox:install': async () => {

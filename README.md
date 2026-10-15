@@ -215,6 +215,24 @@ class WidgetDriver extends Driver
 Other hooks: `listenForQueries()` (report SQL to the query cards), `afterRun()`, `prettyErrors()`, `files()` and
 `models()` (for autocompletion). The full contract is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (§1.7).
 
+### Docker containers
+
+**File → Open Docker Container…** (also on the Get started tab) runs code inside a container that is already running,
+such as a Laravel Sail or docker compose app service. Pick the container and Tinkerbox fills in the project path from
+its working directory and the host folder from the matching bind mount. Each run is `docker exec -i <container> php`
+with the runner on stdin, so nothing is installed in the container or written to the project.
+
+- PHP binary: `php` on the container's PATH unless you set another one.
+- User: optional, for example `sail` or `www-data` when files must be written as that user.
+- Host folder: the folder on this machine that is mounted into the container. File links in the output open in your
+  editor through it. Without one, those links can't be opened.
+- Stop and timeouts end the PHP process inside the container too.
+- Global custom drivers are read from `~/.config/tinkerbox/drivers` inside the container. Project drivers in
+  `.tinkerbox/drivers` work as usual.
+
+Tinkerbox looks for `docker` on PATH and in the usual Docker Desktop, OrbStack and Homebrew folders. Set
+`TINKERBOX_DOCKER` to use another CLI with the same `exec` flags, such as `podman`.
+
 ### Project snippets
 
 Snippets in `<project>/.tinkerbox/snippets/*.php` show up in the Snippets modal (⌘B) and in Open Anything for
@@ -270,12 +288,11 @@ its files change. The end-to-end test runs the app with an isolated profile and 
 
 ## Roadmap
 
-Code currently runs through the local transport (a PHP child process). Execution goes through a small `Transport`
-interface (`src/main/execution/transport.ts`), so remote targets can be added as new transports without changing
-the runner, the data modes or the UI:
+Code runs through the local transport (a PHP child process) or the Docker transport (`docker exec` into a running
+container). Execution goes through a small `Transport` interface (`src/main/execution/transport.ts`), so other remote
+targets can be added as new transports without changing the runner, the data modes or the UI:
 
 - SSH transport (run against a server's PHP)
-- Docker transport (run inside a container)
 - Kubernetes transport (run inside a pod)
 
 ## License
