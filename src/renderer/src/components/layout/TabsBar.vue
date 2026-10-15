@@ -39,6 +39,18 @@ function badgeColor(tab: TabState): string | undefined {
   return tab.kind === 'code' ? connections.color(tab.connectionId) : undefined
 }
 
+function isProduction(tab: TabState): boolean {
+  return tab.kind === 'code' && connections.isProduction(tab.connectionId)
+}
+
+/** Badge tooltip: the project, where it runs and whether it is production ("shop (SSH, production)"). */
+function badgeTitle(tab: TabState): string {
+  if (tab.kind !== 'code') return ''
+  const notes = [connections.isDocker(tab.connectionId) ? 'Docker' : connections.isSsh(tab.connectionId) ? 'SSH' : '', isProduction(tab) ? 'production' : '']
+  const extra = notes.filter(Boolean).join(', ')
+  return connections.label(tab.connectionId) + (extra ? ` (${extra})` : '')
+}
+
 function close(tab: TabState): void {
   void tabs.closeTab(tab.id)
 }
@@ -281,10 +293,10 @@ watch(
         <Spinner v-if="tabs.isRunning(tab.id)" :size="12" class="text-accent" />
         <Rocket v-else-if="tab.kind === 'welcome'" :size="14" class="shrink-0 text-accent" />
         <span
-          v-else-if="badgeColor(tab)"
-          class="size-2 shrink-0 rounded-full"
-          :style="{ backgroundColor: badgeColor(tab) }"
-          :title="connections.label(tab.connectionId) + (connections.isDocker(tab.connectionId) ? ' (Docker)' : '')"
+          v-else-if="badgeColor(tab) || isProduction(tab)"
+          :class="['size-2 shrink-0 rounded-full', isProduction(tab) ? 'ring-2 ring-danger/30' : '']"
+          :style="{ backgroundColor: isProduction(tab) ? 'var(--color-danger)' : badgeColor(tab) }"
+          :title="badgeTitle(tab)"
         />
         <Eye v-if="tabs.watching[tab.id]" :size="13" class="shrink-0 text-accent" />
         <input
@@ -297,7 +309,7 @@ watch(
           @mousedown.stop
           @dblclick.stop
         />
-        <span v-else class="min-w-0 flex-1 truncate">{{ tabs.displayTitle(tab) }}</span>
+        <span v-else :class="['min-w-0 flex-1 truncate', isProduction(tab) ? 'text-danger' : '']">{{ tabs.displayTitle(tab) }}</span>
         <button
           v-if="tabs.canClose(tab)"
           type="button"

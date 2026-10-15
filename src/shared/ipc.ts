@@ -20,6 +20,7 @@ import type {
   RunResult,
   SandboxStatus,
   SessionState,
+  SshHost,
   Settings,
   Snippet,
   UsageStats
@@ -40,7 +41,7 @@ export interface InvokeChannels {
   'settings:reset': [[], Settings]
 
   // Connections ---------------------------------------------------------------
-  /** Project connections (local folders and Docker containers), most recent first. */
+  /** Project connections (local folders, Docker containers, SSH servers), most recent first. */
   'connections:list': [[], Connection[]]
   /** Create or update (by id). Returns the saved connection. */
   'connections:save': [[connection: Connection], Connection]
@@ -64,6 +65,8 @@ export interface InvokeChannels {
   'docker:composeProject': [[dir: string], DockerComposeProject | null]
   /** `docker compose up -d <service>` in the folder; resolves with the refreshed project. */
   'docker:composeUp': [[dir: string, service: string], DockerComposeProject]
+  /** Host aliases from ~/.ssh/config (and its Include files); [] when there is none. */
+  'ssh:hosts': [[], SshHost[]]
 
   // Laravel Sandbox -------------------------------------------------------------------
   'sandbox:status': [[], SandboxStatus]
@@ -207,6 +210,7 @@ export const COMMANDS = [
   'openFolder',
   'openDocker',
   'openDockerCompose',
+  'openSsh',
   'openFile',
   'saveFile',
   'saveFileAs',

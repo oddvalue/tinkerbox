@@ -17,6 +17,7 @@ export {
 } from '../execution'
 export { listDockerContainers } from '../execution/dockerContainers'
 export { composeUp, readComposeProject } from '../execution/dockerCompose'
+export { listSshHosts } from '../execution/sshConfig'
 export { loadShellPath } from '../env/shellPath'
 export { findPhpBinaries, inspectPhpBinary } from '../php/binaries'
 export { listHerdSites } from '../php/herd'

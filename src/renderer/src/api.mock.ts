@@ -111,6 +111,7 @@ export function createMockBridge(platform: NodeJS.Platform): TinkerboxBridge {
     'herd:sites': () => [],
     'docker:containers': () => [],
     'docker:composeProject': () => null,
+    'ssh:hosts': () => [],
     'docker:composeUp': () => {
       throw new Error(MOCK_NOTICE)
     },

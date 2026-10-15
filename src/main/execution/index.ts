@@ -64,7 +64,7 @@ const membersCache = new PromiseCache<ClassMembers | null>(CACHE_TTL_MS)
 
 /** Cache key: connection id + a hash of everything that changes where/how the code runs. */
 function cacheKey(conn: Connection): string {
-  const target = conn.type === 'docker' ? [conn.container, conn.user ?? ''] : []
+  const target = conn.type === 'docker' ? [conn.container, conn.user ?? ''] : conn.type === 'ssh' ? [conn.host, conn.port ?? 0] : []
   const relevant = [conn.type, conn.path, conn.phpBinary ?? '', conn.driver ?? '', ...target]
   return `${conn.id}|${createHash('sha1').update(JSON.stringify(relevant)).digest('hex')}`
 }
@@ -425,7 +425,7 @@ export function snippetFileKey(file: string): string {
 export async function projectSnippets(ctx: ExecutionContext, connectionId: string | null): Promise<Snippet[]> {
   const conn = await resolveTargetConnection(ctx, connectionId)
   if (conn.id === SCRATCH_CONNECTION_ID || !conn.path) return []
-  // The folder on this machine: the project itself, or a Docker connection's bind-mount source ('' => unknown).
+  // The folder on this machine: the project itself, or a remote connection's local copy / bind-mount source ('' => unknown).
   const localRoot = conn.type === 'local' ? expandHome(conn.path) : conn.hostPath ? expandHome(conn.hostPath) : ''
   const snippetsDir = localRoot ? join(localRoot, '.tinkerbox', 'snippets') : ''
   // Fast path: no snippets folder → no PHP process. Without a local copy the runner looks inside the container.

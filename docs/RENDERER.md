@@ -21,7 +21,7 @@ src/renderer/src/
   components/ModalHost.vue
   components/editor  EditorPane + Monaco integration (with monaco/)
   components/output  Cards / CLI output, Table Preview, Object Graph, HTML Preview
-  components/modals  settings, palette, history, snippets, themes, logs, panels, php, docker, wrapped, share
+  components/modals  settings, palette, history, snippets, themes, logs, panels, php, docker, ssh, wrapped, share
 ```
 
 ## Startup & lifecycle
@@ -115,7 +115,7 @@ actions `load()`, `loadInfo()`, `refreshSandbox()`, `installSandbox()` (progress
 outcome), `loadHerdSites()`. `guessHome(path)` helper.
 
 ### `useConnectionsStore()`
-Connections = local project folders and Docker containers (recent projects) + the implicit `'sandbox'` ("Default") and `'scratch'` ("PHP").
+Connections = local project folders, Docker containers and SSH servers (recent projects) + the implicit `'sandbox'` ("Default") and `'scratch'` ("PHP").
 A tab's `connectionId: null` = default: Default Working Directory → Sandbox (installed) → PHP.
 
 | member | description |
@@ -125,7 +125,9 @@ A tab's `connectionId: null` = default: Default Working Directory → Sandbox (i
 | `defaultConnectionLabel: string` | label of what `null` resolves to: DWD folder name, 'Default' or 'PHP' |
 | `label(id \| null): string` | 'Default' (sandbox; 'PHP' when not installed), 'PHP' (scratch), project name |
 | `byId(id)`, `findByPath(path)` | lookups (`findByPath` matches local folders only) |
-| `isDocker(id)`, `subtitle(id)`, `hostPath(id)` | Docker check; display subtitle (`~/code/shop`, `app:/var/www/html`, `app (plain PHP)`); folder on this machine ('' for Docker without `hostPath`) |
+| `isSsh(id)`, `isRemote(id)`, `isProduction(id)` | SSH check; Docker or SSH; marked as production (runs ask first) |
+| `openSsh(input)`, `listSshHosts()` | save an SSH connection as used (reuses the same host, port and path); Host entries from ~/.ssh/config (`ssh:hosts`) |
+| `isDocker(id)`, `subtitle(id)`, `hostPath(id)` | Docker check; display subtitle (`~/code/shop`, `app:/var/www/html`, `prod-web:/var/www/shop`, `app (plain PHP)`); folder on this machine ('' for Docker without `hostPath`) |
 | `effectiveId(id \| null): string \| null` | concrete id behind a tab connection (null when the DWD has no stored entry) |
 | `path(id \| null): string` | project directory ('' = plain PHP) |
 | `color(id \| null): string \| undefined` | badge color (explicit `color`, else stable per project; undefined for defaults) |
@@ -136,7 +138,7 @@ A tab's `connectionId: null` = default: Default Working Directory → Sandbox (i
 | `openDocker(input)`, `listContainers()`, `composeProject(dir)`, `composeUp(dir, service)` | save a Docker connection as used (reuses the same compose service, else the same container, path and user); running containers; compose project in a folder (null without a compose file); `docker compose up -d <service>` |
 | `toggleDebug(id \| null): Promise<boolean>` | flips `debug` on the project behind the tab |
 
-`colorForName(name)`, `isImplicitConnection(id)`, `isDockerConnection(conn)`, `connectionSubtitle(conn, home?)`,
+`colorForName(name)`, `isImplicitConnection(id)`, `isDockerConnection(conn)`, `isSshConnection(conn)`, `isRemoteConnection(conn)`, `connectionSubtitle(conn, home?)`,
 `hostPathOf(conn, innerPath?)` are exported helpers.
 
 ### `useTabsStore()`
@@ -167,7 +169,7 @@ label → "Get started").
 | `replaceCode(id, code)` | programmatic replace (updates the mounted editor too) |
 | `insertCode(id, text)` | insert at the cursor (append when no editor) |
 | `openCode(code, { connectionId?, newTab?, run? })` | history/snippet "open": replaces the active code tab's code or opens a tab |
-| `run({ tabId?, selectionOnly?, auto? }): Promise<RunResult \| null>` | see below |
+| `run({ tabId?, selectionOnly?, auto?, trigger? }): Promise<RunResult \| null>` | see below |
 | `cancel(id?)` | `run:cancel` (the run resolves with `cancelled: true`) |
 | `clearOutput(id?)` | result + streamed cleared, `clearDecorations()` |
 | `openFile()`, `openFileContent(path, content)`, `saveFile(id?, { as? })`, `toggleWatch(id?)` | file tabs; `file:changed` replaces the code and re-runs |
@@ -181,6 +183,9 @@ empty code does nothing; `autoHideOutput` + hidden output → `showOutput: true`
 (`failedRunResult()`); `run:progress` chunks of the current run append to `streamed[tabId]`.
 Auto-evaluate (`settings.autoRun`): `setCode` schedules `run({ auto: true })` after `autoRunDelayMs`
 (whole buffer, no prettify, never cancels a running script).
+Production guard (`utils/production.ts`): on a connection with `production: true`, runs the user starts (and re-runs
+after a watched file changes) ask with `ui.confirm('Run on production?')`; auto-evaluate does not run there and shows
+one toast per tab. `RunArgs.trigger` is `'manual' | 'auto' | 'watch'`.
 
 ### `useSnippetsStore()`
 `snippets: Snippet[]` (user + project snippets of `connectionId`), `loaded`, `loading`, `connectionId`, getters
@@ -233,6 +238,7 @@ Modal components declare the props below with `defineProps`, use `<Modal>` from 
 | `logs` | modals/logs/LogsModal.vue | `{ connectionId: string \| null }` |
 | `panels` | modals/panels/PanelsModal.vue | `{ connectionId: string \| null }` |
 | `php` | modals/php/PhpSettingsModal.vue | `{ connectionId: string \| null }` |
+| `ssh` | modals/ssh/SshConnectionModal.vue | `{ connectionId?: string }` (new connection, or edit a stored one) |
 | `docker` | modals/docker/DockerConnectionModal.vue | `{ connectionId?: string; flow?: 'compose' \| 'containers'; pickFolder?: boolean }` (new or edit; `flow` picks the tab, `pickFolder` opens the compose folder picker) |
 | `wrapped` | modals/wrapped/WrappedModal.vue | `{ year?: number }` |
 | `share` | modals/share/ShareGistModal.vue | `{ code: string; connectionId?: string \| null }` |
@@ -261,7 +267,7 @@ commands — or every command when `api.isMock`), palette and buttons. Plain-key
 modal / context menu / popover is open or in form fields. While a modal is open only `closeTab`, `commandPalette`,
 `openSettings`, `showHistory`, `showSnippets`, `showLogs`, `zenMode`, `run` pass the renderer listener.
 
-Notable implementations: `openDocker` opens the `docker` modal; `openDockerCompose` opens it in the compose flow and runs the folder picker; `closeTab` closes the top modal first; `showHistory/showSnippets/showLogs/openSettings/
+Notable implementations: `openDocker` opens the `docker` modal; `openDockerCompose` opens it in the compose flow and runs the folder picker; `openSsh` opens the `ssh` modal; `closeTab` closes the top modal first; `showHistory/showSnippets/showLogs/openSettings/
 commandPalette` toggle; `toggleToolbar` and `toggleSidebar` both toggle the icon sidebar (`showToolbar`, the
 "toolbar" setting; ⌘\ is the "purist mode" alias); `zenMode` = `ui.toggleZen()`; `zoomIn/zoomOut/resetZoom` change
 `editorFontSize` (8–40) and `outputFontSize` (8–32); `toggleFullscreen` uses the HTML fullscreen API;

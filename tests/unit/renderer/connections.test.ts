@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import { setBridge } from '@/api'
-import type { DockerConnection } from '@shared/types'
+import type { DockerConnection, SshConnection } from '@shared/types'
 import { connectionSubtitle, hostPathOf, useConnectionsStore } from '@/stores/connections'
 import { useSettingsStore } from '@/stores/settings'
 import { fakeBridge, type FakeBridge } from './helpers'
@@ -152,5 +152,50 @@ describe('Docker connections', () => {
     })
     setBridge(fake.bridge)
     await expect(useConnectionsStore().listContainers()).rejects.toThrow('Docker is not running')
+  })
+})
+
+describe('SSH connections', () => {
+  const SSH: SshConnection = { id: 'ssh-1', name: 'prod-web shop', type: 'ssh', host: 'prod-web', path: '/var/www/shop', createdAt: 1, lastUsedAt: 3 }
+
+  it('are recent projects but never match a local folder', () => {
+    const connections = useConnectionsStore()
+    connections.connections = [SSH, { ...SSH, id: 'ssh-2', path: '', lastUsedAt: 2 }]
+    expect(connections.recent.map((c) => c.id)).toEqual(['ssh-1', 'ssh-2'])
+    expect(connections.findByPath('/var/www/shop')).toBeUndefined()
+    expect(connections.isSsh('ssh-1')).toBe(true)
+    expect(connections.isRemote('ssh-1')).toBe(true)
+    expect(connections.isDocker('ssh-1')).toBe(false)
+    expect(connections.isProduction('ssh-1')).toBe(false)
+    connections.connections = [{ ...SSH, production: true }]
+    expect(connections.isProduction('ssh-1')).toBe(true)
+  })
+
+  it('describe and map paths like Docker ones', () => {
+    expect(connectionSubtitle(SSH)).toBe('prod-web:/var/www/shop')
+    expect(connectionSubtitle({ ...SSH, path: '' })).toBe('prod-web (plain PHP)')
+    const withCheckout = { ...SSH, hostPath: '/Users/dev/shop' }
+    expect(hostPathOf(withCheckout, '/var/www/shop/storage/logs')).toBe('/Users/dev/shop/storage/logs')
+    expect(hostPathOf(SSH, '/var/www/shop/storage/logs')).toBe('')
+  })
+
+  it('opens a server: saves it as used and reuses the same host, port and path', async () => {
+    const connections = useConnectionsStore()
+    const conn = await connections.openSsh({ host: 'prod-web', path: '/var/www/shop', name: 'prod-web shop' })
+    expect(conn.id).toMatch(/^ssh-/)
+    expect(conn.type).toBe('ssh')
+    expect(conn.lastUsedAt).toBeGreaterThan(0)
+    const again = await connections.openSsh({ host: 'prod-web', path: '/var/www/shop', name: 'renamed', production: true })
+    expect(again.id).toBe(conn.id)
+    expect(again.production).toBe(true)
+    expect((await connections.openSsh({ host: 'prod-web', port: 2222, path: '/var/www/shop', name: 'x' })).id).not.toBe(conn.id)
+    expect((await connections.openSsh({ host: 'prod-web', path: '/var/www/other', name: 'x' })).id).not.toBe(conn.id)
+  })
+
+  it('lists hosts from the ssh config', async () => {
+    const host = { alias: 'prod-web', hostName: 'web.example.com', user: 'deploy', port: 0 }
+    fake = fakeBridge({ 'ssh:hosts': () => [host] })
+    setBridge(fake.bridge)
+    expect(await useConnectionsStore().listSshHosts()).toEqual([host])
   })
 })

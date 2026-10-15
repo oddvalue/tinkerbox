@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Bug, ChevronDown, ChevronUp, CircleCheck, Container, Info, TriangleAlert, Zap } from 'lucide-vue-next'
+import { Bug, ChevronDown, ChevronUp, CircleCheck, Container, Info, Server, TriangleAlert, Zap } from 'lucide-vue-next'
 import { executeCommand } from '../../commands'
 import { useAppStore } from '../../stores/app'
-import { isDockerConnection, useConnectionsStore } from '../../stores/connections'
+import { isRemoteConnection, useConnectionsStore } from '../../stores/connections'
 import { useEnvironmentStore } from '../../stores/environment'
 import { useSettingsStore } from '../../stores/settings'
 import { useTabsStore } from '../../stores/tabs'
@@ -13,7 +13,7 @@ import Spinner from '../common/Spinner.vue'
 import Tooltip from '../common/Tooltip.vue'
 
 /**
- * Footer: framework ⓘ (Panels), Docker container, PHP version (PHP Settings), time / memory of the last run, Xdebug + auto-run
+ * Footer: framework ⓘ (Panels), Docker / SSH target, production badge, PHP version (PHP Settings), time / memory of the last run, Xdebug + auto-run
  * badges, autocompletion status, the vim status slot (#vim-status-<tabId>) and the output chevron.
  */
 const tabs = useTabsStore()
@@ -30,9 +30,15 @@ const envStatus = computed(() => (tab.value ? environment.statusOf(tab.value.con
 const envError = computed(() => (tab.value ? environment.errorOf(tab.value.connectionId) : null))
 const running = computed(() => tabs.isRunning(tab.value?.id))
 const debugging = computed(() => !!tab.value && connections.isDebugging(tab.value.connectionId))
-const docker = computed(() => {
+const remote = computed(() => {
   const conn = tab.value ? connections.resolve(tab.value.connectionId) : null
-  return isDockerConnection(conn) ? conn : null
+  return isRemoteConnection(conn) ? conn : null
+})
+const production = computed(() => !!tab.value && connections.isProduction(tab.value.connectionId))
+const remoteTitle = computed(() => {
+  const conn = remote.value
+  if (!conn) return ''
+  return conn.type === 'docker' ? `Runs in the Docker container ${conn.container} (click to edit)` : `Runs on ${conn.host} over SSH (click to edit)`
 })
 
 const driver = computed(() => result.value?.driver ?? env.value?.driver ?? null)
@@ -137,17 +143,28 @@ function openPhp(): void {
         <span class="max-w-[220px] truncate">{{ frameworkLabel }}</span>
         <Info :size="13" class="text-accent" :stroke-width="2.2" />
       </button>
-      <template v-if="docker">
+      <template v-if="remote">
         <span class="mx-0.5 h-3.5 w-px bg-line" />
         <button
           type="button"
           class="flex h-6 items-center gap-1 rounded-md px-2 font-sans text-[11px] font-semibold hover:bg-hover hover:text-fg"
-          :title="`Runs in the Docker container ${docker.container} (click to edit)`"
-          data-testid="status-docker"
-          @click="ui.openModal('docker', { connectionId: docker.id })"
+          :title="remoteTitle"
+          data-testid="status-remote"
+          @click="ui.openModal(remote.type, { connectionId: remote.id })"
         >
-          <Container :size="13" /> Docker
+          <template v-if="remote.type === 'docker'"><Container :size="13" /> Docker</template>
+          <template v-else><Server :size="13" /> SSH</template>
         </button>
+      </template>
+      <template v-if="production">
+        <span class="mx-0.5 h-3.5 w-px bg-line" />
+        <span
+          class="flex h-5 items-center rounded-full bg-danger/14 px-2 font-sans text-[11px] font-semibold text-danger"
+          title="Production connection: every run asks first, auto-evaluate is off"
+          data-testid="status-production"
+        >
+          Production
+        </span>
       </template>
       <span class="mx-0.5 h-3.5 w-px bg-line" />
       <button

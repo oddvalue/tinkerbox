@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
-import { Bug, Check, Container, FileSearch, Pencil, RotateCcw } from 'lucide-vue-next'
+import { Bug, Check, Container, FileSearch, Pencil, RotateCcw, Server, ShieldAlert } from 'lucide-vue-next'
 import type { Connection, PhpBinary } from '@shared/types'
 import { api } from '../../../api'
 import { useAppStore } from '../../../stores/app'
-import { isDockerConnection, useConnectionsStore } from '../../../stores/connections'
+import { isRemoteConnection, useConnectionsStore } from '../../../stores/connections'
 import { useEnvironmentStore } from '../../../stores/environment'
 import { useSettingsStore } from '../../../stores/settings'
 import { useTabsStore } from '../../../stores/tabs'
@@ -21,8 +21,9 @@ import { binaryValue, effectiveBinary, globalBinary, guessAutoBinary, matchesBin
 
 /**
  * Per-project PHP settings (click the PHP version in the footer): PHP binary override (path or Herd alias) with
- * validation, detected installations, reset to the global default, and the Xdebug step debugging toggle. A Docker
- * connection shows its container instead: its PHP binary lives in the container and is edited in the Docker form.
+ * validation, detected installations, reset to the global default, and the Xdebug step debugging toggle. A Docker or
+ * SSH connection shows its container or server instead: its PHP binary lives there and is edited in that form.
+ * Every connection can be marked as production.
  */
 const props = defineProps<{ connectionId: string | null }>()
 const emit = defineEmits<{ close: [result?: unknown] }>()
@@ -37,8 +38,10 @@ const ui = useUiStore()
 const connection = computed<Connection | null>(() => connections.resolve(props.connectionId))
 const projectLabel = computed(() => connections.label(props.connectionId))
 const projectPath = computed(() => connections.path(props.connectionId))
-const docker = computed(() => (isDockerConnection(connection.value) ? connection.value : null))
-const projectSubtitle = computed(() => (docker.value ? connections.subtitle(docker.value.id) : tildify(projectPath.value, app.homeDir)))
+const remote = computed(() => (isRemoteConnection(connection.value) ? connection.value : null))
+const projectSubtitle = computed(() => (remote.value ? connections.subtitle(remote.value.id) : tildify(projectPath.value, app.homeDir)))
+const production = computed(() => connection.value?.production === true)
+const productionBusy = ref(false)
 const configured = computed(() => connection.value?.phpBinary?.trim() ?? '')
 const globalValue = computed(() => globalBinary(settings.settings.phpBinary))
 const effective = computed(() => effectiveBinary(configured.value, settings.settings.phpBinary))
@@ -73,7 +76,7 @@ watch(input, () => (inputError.value = null))
 let detectToken = 0
 async function detect(): Promise<void> {
   // 'php:inspect' checks binaries on this machine; a container's PHP is reported by its runs.
-  if (docker.value) return
+  if (remote.value) return
   const token = ++detectToken
   detectError.value = null
   if (effective.value === 'auto') {
@@ -111,7 +114,7 @@ async function detect(): Promise<void> {
 watch(effective, () => void detect())
 
 async function loadBinaries(): Promise<void> {
-  if (docker.value) return
+  if (remote.value) return
   binariesLoading.value = true
   try {
     binaries.value = await api.invoke('php:binaries')
@@ -201,8 +204,21 @@ async function browse(): Promise<void> {
   }
 }
 
-function editContainer(): void {
-  if (docker.value) void ui.openModal('docker', { connectionId: docker.value.id })
+function editRemote(): void {
+  if (remote.value) void ui.openModal(remote.value.type, { connectionId: remote.value.id })
+}
+
+async function setProduction(on: boolean): Promise<void> {
+  if (on === production.value || productionBusy.value) return
+  productionBusy.value = true
+  try {
+    const conn = await ensureConnection()
+    await connections.save({ ...cloneJson(conn), production: on })
+  } catch (err) {
+    ui.error(err, 'Could not change the production setting')
+  } finally {
+    productionBusy.value = false
+  }
 }
 
 async function setDebugging(on: boolean): Promise<void> {
@@ -224,7 +240,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <Modal title="PHP Settings" size="md" :initial-focus="docker ? undefined : '[data-php-input]'" @close="emit('close')">
+  <Modal title="PHP Settings" size="md" :initial-focus="remote ? undefined : '[data-php-input]'" @close="emit('close')">
     <div class="space-y-5">
       <p class="-mt-1 text-[13px] text-muted">
         PHP used for
@@ -232,29 +248,40 @@ onMounted(() => {
         <span v-if="projectSubtitle" class="font-mono text-[11.5px]"> · {{ projectSubtitle }}</span>
       </p>
 
-      <!-- Docker container -->
-      <section v-if="docker" class="space-y-2" data-testid="php-docker">
-        <h3 class="text-[13px] font-semibold text-fg">Docker container</h3>
+      <!-- Docker container / SSH server -->
+      <section v-if="remote" class="space-y-2" data-testid="php-remote">
+        <h3 class="text-[13px] font-semibold text-fg">{{ remote.type === 'docker' ? 'Docker container' : 'SSH server' }}</h3>
         <div class="flex items-start gap-3 rounded-xl border border-line p-3.5">
-          <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-fg/6 text-muted"><Container :size="16" /></span>
+          <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-fg/6 text-muted">
+            <Container v-if="remote.type === 'docker'" :size="16" />
+            <Server v-else :size="16" />
+          </span>
           <dl class="grid min-w-0 flex-1 grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-            <dt class="text-muted">Container</dt>
-            <dd class="selectable truncate font-mono text-fg">{{ docker.container }}</dd>
+            <template v-if="remote.type === 'docker'">
+              <dt class="text-muted">Container</dt>
+              <dd class="selectable truncate font-mono text-fg">{{ remote.container }}</dd>
+            </template>
+            <template v-else>
+              <dt class="text-muted">Host</dt>
+              <dd class="selectable truncate font-mono text-fg">{{ remote.host }}{{ remote.port ? `:${remote.port}` : '' }}</dd>
+            </template>
             <dt class="text-muted">PHP binary</dt>
-            <dd class="selectable truncate font-mono text-fg">{{ docker.phpBinary || 'php' }}</dd>
+            <dd class="selectable truncate font-mono text-fg">{{ remote.phpBinary || 'php' }}</dd>
             <dt class="text-muted">Version</dt>
             <dd class="truncate font-mono text-fg">{{ reportedVersion ? `PHP ${reportedVersion}` : 'Unknown until the first run' }}</dd>
-            <template v-if="docker.user">
+            <template v-if="remote.type === 'docker' && remote.user">
               <dt class="text-muted">User</dt>
-              <dd class="selectable truncate font-mono text-fg">{{ docker.user }}</dd>
+              <dd class="selectable truncate font-mono text-fg">{{ remote.user }}</dd>
             </template>
           </dl>
-          <Button size="sm" :icon="Pencil" data-testid="php-edit-docker" @click="editContainer">Edit container…</Button>
+          <Button size="sm" :icon="Pencil" data-testid="php-edit-remote" @click="editRemote">
+            {{ remote.type === 'docker' ? 'Edit container…' : 'Edit server…' }}
+          </Button>
         </div>
       </section>
 
       <!-- Configured binary -->
-      <section v-if="!docker" class="space-y-2">
+      <section v-if="!remote" class="space-y-2">
         <h3 class="text-[13px] font-semibold text-fg">Configured PHP Binary</h3>
         <div class="flex items-start gap-2">
           <div class="min-w-0 flex-1" data-php-input>
@@ -297,7 +324,7 @@ onMounted(() => {
       </section>
 
       <!-- Detected installations -->
-      <section v-if="!docker" class="space-y-2">
+      <section v-if="!remote" class="space-y-2">
         <h3 class="text-[13px] font-semibold text-fg">Detected PHP binaries</h3>
         <div v-if="binariesLoading" class="flex items-center gap-2 py-2 text-xs text-muted">
           <Spinner :size="13" /> Looking for PHP installations…
@@ -351,9 +378,9 @@ onMounted(() => {
               :disabled="debugBusy"
               @update:model-value="setDebugging"
             />
-            <p v-if="docker" class="mt-1 text-xs leading-relaxed text-muted">
-              Runs this project with Xdebug's step debugger. Xdebug must be installed in the container and able to reach
-              your IDE on port 9003.
+            <p v-if="remote" class="mt-1 text-xs leading-relaxed text-muted">
+              Runs this project with Xdebug's step debugger. Xdebug must be installed
+              {{ remote.type === 'docker' ? 'in the container' : 'on the server' }} and able to reach your IDE on port 9003.
             </p>
             <p v-else class="mt-1 text-xs leading-relaxed text-muted">
               Runs this project with Xdebug's step debugger so breakpoints in your IDE are hit. Requires Laravel Herd (or PHP
@@ -362,10 +389,33 @@ onMounted(() => {
           </div>
         </div>
       </section>
+
+      <!-- Production -->
+      <section class="rounded-xl border border-line p-3.5" data-testid="php-production">
+        <div class="flex items-start gap-3">
+          <span
+            :class="[
+              'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg',
+              production ? 'bg-danger/14 text-danger' : 'bg-fg/6 text-muted'
+            ]"
+          >
+            <ShieldAlert :size="16" />
+          </span>
+          <div class="min-w-0 flex-1">
+            <Toggle
+              :model-value="production"
+              label="Production"
+              description="Shows a red badge and asks before each run."
+              :disabled="productionBusy"
+              @update:model-value="setProduction"
+            />
+          </div>
+        </div>
+      </section>
     </div>
 
     <template #footer>
-      <Button v-if="!docker" variant="ghost" size="sm" :icon="RotateCcw" :loading="resetting" :disabled="!configured" @click="reset">
+      <Button v-if="!remote" variant="ghost" size="sm" :icon="RotateCcw" :loading="resetting" :disabled="!configured" @click="reset">
         Reset PHP to global default
       </Button>
       <div class="flex-1" />

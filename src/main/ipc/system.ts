@@ -30,14 +30,17 @@ function saveFilters(defaultName: string | undefined): Array<{ name: string; ext
   ]
 }
 
+/** What the folder on this machine is called in the connection forms. */
+const REMOTE_FOLDER = { docker: 'host folder', ssh: 'local folder' } as const
+
 /** Dialogs, files, shell integration, clipboard, window title and the CLI helper. */
 export function systemHandlers(ctx: ShellContext) {
   const watchedSenders = new WeakSet<WebContents>()
 
   const projectDirFor = (connectionId: string | null): string => {
     const conn = ctx.exec.resolveConnection(connectionId)
-    if (conn.type === 'docker') {
-      if (!conn.hostPath) throw new UserFacingError('Set a host folder for this Docker project to open it in your editor.')
+    if (conn.type !== 'local') {
+      if (!conn.hostPath) throw new UserFacingError(`Set a ${REMOTE_FOLDER[conn.type]} for this project to open it in your editor.`)
       return conn.hostPath
     }
     if (!conn.path) throw new UserFacingError('This tab is not attached to a project folder.')
@@ -48,7 +51,7 @@ export function systemHandlers(ctx: ShellContext) {
   const dockerHint = (connectionId: unknown): string => {
     try {
       const conn = ctx.exec.resolveConnection(connectionIdOrNull(connectionId))
-      return conn.type === 'docker' && !conn.hostPath ? ' Set a host folder for this Docker project to open its files.' : ''
+      return conn.type !== 'local' && !conn.hostPath ? ` Set a ${REMOTE_FOLDER[conn.type]} for this project to open its files.` : ''
     } catch {
       return ''
     }

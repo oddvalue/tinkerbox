@@ -12,6 +12,7 @@ import {
   invalidateCaches,
   listDockerContainers,
   listHerdSites,
+  listSshHosts,
   listLogs,
   projectPanels,
   readComposeProject,
@@ -78,6 +79,7 @@ export function executionHandlers(ctx: ShellContext) {
     },
     'herd:sites': () => ready(() => listHerdSites()),
     'docker:containers': () => ready(() => userFacing(listDockerContainers())),
+    'ssh:hosts': () => listSshHosts(),
     'docker:composeProject': (_e, dir) => {
       const folder = projectFolder(dir)
       return ready(() => userFacing(readComposeProject(folder)))

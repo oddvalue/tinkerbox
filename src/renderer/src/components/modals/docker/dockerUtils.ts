@@ -14,6 +14,8 @@ export interface DockerFormState {
   phpBinary: string
   user: string
   name: string
+  /** A live system: the UI marks it and asks before each run. */
+  production: boolean
 }
 
 /** Values the form last filled in by itself. null never matches, so the field is left alone (edit mode). */
@@ -37,7 +39,7 @@ export const CONTAINER_USER = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}(:[A-Za-z0-9_][A
 const WEB_ROOT = '/var/www/html'
 
 export function emptyDockerForm(): DockerFormState {
-  return { container: '', path: '', hostPath: '', phpBinary: '', user: '', name: '' }
+  return { container: '', path: '', hostPath: '', phpBinary: '', user: '', name: '', production: false }
 }
 
 export function dockerFormFrom(conn: DockerConnection): DockerFormState {
@@ -47,7 +49,8 @@ export function dockerFormFrom(conn: DockerConnection): DockerFormState {
     hostPath: conn.hostPath ?? '',
     phpBinary: conn.phpBinary ?? '',
     user: conn.user ?? '',
-    name: conn.name
+    name: conn.name,
+    production: conn.production === true
   }
 }
 
@@ -267,7 +270,7 @@ export function applyComposeService(
   return { form: next, suggested }
 }
 
-function isAbsoluteHostPath(path: string): boolean {
+export function isAbsoluteHostPath(path: string): boolean {
   return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
 }
 
@@ -298,6 +301,7 @@ export function dockerInput(form: DockerFormState, compose: DockerComposeRef | n
     hostPath: form.hostPath.trim(),
     phpBinary: form.phpBinary.trim(),
     user: form.user.trim(),
-    name: form.name.trim() || container
+    name: form.name.trim() || container,
+    production: form.production
   }
 }

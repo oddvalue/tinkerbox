@@ -22,6 +22,7 @@ import Modal from '../../common/Modal.vue'
 import SegmentedControl from '../../common/SegmentedControl.vue'
 import Spinner from '../../common/Spinner.vue'
 import TextInput from '../../common/TextInput.vue'
+import Toggle from '../../common/Toggle.vue'
 import type { Segment } from '../../common/types'
 import {
   EDIT_SUGGESTIONS,
@@ -465,6 +466,9 @@ onMounted(() => {
       <div>
         <label class="mb-1.5 block text-xs font-semibold text-muted">Name</label>
         <TextInput v-model="form.name" :placeholder="form.container.trim() || 'Shown on tabs and in recent projects'" @enter="submit" />
+      </div>
+      <div data-testid="docker-production">
+        <Toggle v-model="form.production" label="Production" description="Shows a red badge and asks before each run." />
       </div>
 
       <div

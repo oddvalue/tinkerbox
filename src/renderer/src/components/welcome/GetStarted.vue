@@ -9,6 +9,7 @@ import {
   FolderOpen,
   Globe,
   Lightbulb,
+  Server,
   Sparkles,
   Terminal,
   Trash2
@@ -141,19 +142,15 @@ onMounted(() => {
               <Kbd :accelerator="settings.accelerator('openFolder')" />
             </button>
 
-            <button
-              type="button"
-              class="group flex items-center gap-3 rounded-xl border border-transparent p-3 text-left transition-colors hover:border-line hover:bg-app-alt/60"
-              data-testid="open-docker"
-              @click="executeCommand('openDocker')"
-            >
-              <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Container :size="20" /></span>
+            <div class="flex items-center gap-3 rounded-xl border border-transparent p-3">
+              <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Server :size="20" /></span>
               <span class="min-w-0 flex-1">
-                <span class="block font-semibold text-fg">Open Docker container…</span>
-                <span class="block text-xs text-muted">Run code in a running container or a service of a compose project</span>
+                <span class="block font-semibold text-fg">Remote project</span>
+                <span class="block text-xs text-muted">Run code in a Docker container, a compose service or on a server over SSH</span>
               </span>
-              <Kbd :accelerator="settings.accelerator('openDocker')" />
-            </button>
+              <Button size="sm" :icon="Container" data-testid="open-docker" @click="executeCommand('openDocker')">Docker…</Button>
+              <Button size="sm" :icon="Server" data-testid="open-ssh" @click="executeCommand('openSsh')">SSH…</Button>
+            </div>
 
             <button
               type="button"
@@ -213,6 +210,7 @@ onMounted(() => {
                   <span class="block truncate font-mono text-[11px] text-muted">{{ connections.subtitle(conn.id) }}</span>
                 </span>
                 <Container v-if="conn.type === 'docker'" :size="14" class="shrink-0 text-muted" aria-label="Docker" />
+                <Server v-else-if="conn.type === 'ssh'" :size="14" class="shrink-0 text-muted" aria-label="SSH" />
               </button>
             </li>
           </ul>

@@ -55,6 +55,8 @@ export interface ModalPropsMap {
    * or a compose file); `pickFolder` opens the folder picker of the compose flow right away.
    */
   docker: { connectionId?: string; flow?: DockerFlow; pickFolder?: boolean }
+  /** New SSH connection (no `connectionId`) or edit an existing one. */
+  ssh: { connectionId?: string }
   wrapped: { year?: number }
   share: { code: string; connectionId?: string | null }
   tablePreview: { value: DumpNode; title?: string }
@@ -79,6 +81,7 @@ export const MODAL_NAMES: readonly ModalName[] = [
   'panels',
   'php',
   'docker',
+  'ssh',
   'wrapped',
   'share',
   'tablePreview',

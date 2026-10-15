@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { basename, isAbsolute, posix, resolve as resolvePath } from 'node:path'
-import type { Connection, ConnectionBase, DockerConnection, LocalConnection } from '../../shared/types'
+import type { Connection, ConnectionBase, DockerConnection, LocalConnection, SshConnection } from '../../shared/types'
 import {
   cloneJson,
   consoleLogger,
@@ -53,7 +53,8 @@ const CONTAINER_USER = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}(:[A-Za-z0-9_][A-Za-z0-
 export function sanitizeConnection(input: unknown, now = Date.now()): Connection {
   if (!isPlainObject(input)) throw new TypeError('Connection must be an object')
   if (input.type === 'docker') return sanitizeDockerConnection(input, now)
-  if (input.type !== 'local') throw new TypeError('Only local project and Docker connections are supported')
+  if (input.type === 'ssh') return sanitizeSshConnection(input, now)
+  if (input.type !== 'local') throw new TypeError('Only local project, Docker and SSH connections are supported')
   const path = typeof input.path === 'string' ? input.path.slice(0, 4096) : ''
   if (path !== '' && !isAbsolute(path)) throw new TypeError('Project path must be absolute')
   const conn: LocalConnection = {
@@ -102,6 +103,39 @@ function sanitizeDockerConnection(input: Record<string, unknown>, now: number): 
   return conn
 }
 
+/**
+ * ssh destinations: Host alias, host or user@host (IPv6 in brackets). No leading `-`, so the value can never be read
+ * as an ssh option.
+ */
+const SSH_HOST = /^[A-Za-z0-9_[][A-Za-z0-9_.@%:[\]-]{0,254}$/
+
+function sanitizeSshConnection(input: Record<string, unknown>, now: number): SshConnection {
+  const host = typeof input.host === 'string' ? input.host.trim() : ''
+  if (!SSH_HOST.test(host)) throw new TypeError('Host must be an ssh destination such as prod-web or deploy@example.com')
+  const path = typeof input.path === 'string' ? input.path.trim().slice(0, 4096) : ''
+  if (path !== '' && !posix.isAbsolute(path)) throw new TypeError('Path on the server must be absolute (e.g. /var/www/app)')
+  const conn: SshConnection = {
+    id: typeof input.id === 'string' && input.id.trim() !== '' ? input.id.slice(0, 200) : `ssh-${randomUUID()}`,
+    name: (typeof input.name === 'string' ? input.name.trim().slice(0, 200) : '') || host,
+    type: 'ssh',
+    host,
+    path: path === '' ? '' : posix.normalize(path).replace(/(.)\/+$/, '$1'),
+    createdAt: isFiniteNumber(input.createdAt) ? input.createdAt : now
+  }
+  if (input.port !== undefined && input.port !== null && input.port !== '' && input.port !== 0) {
+    const port = Number(input.port)
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError('Port must be between 1 and 65535')
+    conn.port = port
+  }
+  const hostPath = optionalString(input.hostPath, 4096)
+  if (hostPath !== undefined) {
+    if (!isAbsolute(hostPath)) throw new TypeError('Local folder must be absolute')
+    conn.hostPath = hostPath
+  }
+  copyCommonFields(input, conn)
+  return conn
+}
+
 /** Optional settings shared by every connection type. */
 function copyCommonFields(input: Record<string, unknown>, conn: ConnectionBase): void {
   const phpBinary = optionalString(input.phpBinary, 4096)
@@ -112,14 +146,15 @@ function copyCommonFields(input: Record<string, unknown>, conn: ConnectionBase):
   if (color !== undefined) conn.color = color
   if (isFiniteNumber(input.lastUsedAt)) conn.lastUsedAt = input.lastUsedAt
   if (input.debug === true) conn.debug = true
+  if (input.production === true) conn.production = true
 }
 
 /**
- * A project "has settings" when it is more than a plain recent folder (kept when recents are cleared). A Docker
- * connection always has: its container and path cannot be recreated by opening a folder again.
+ * A project "has settings" when it is more than a plain recent folder (kept when recents are cleared). Docker and SSH
+ * connections always have: their target cannot be recreated by opening a folder again.
  */
 export function hasCustomSettings(conn: Connection): boolean {
-  return conn.type !== 'local' || !!conn.phpBinary || !!conn.driver || !!conn.color || !!conn.debug
+  return conn.type !== 'local' || !!conn.phpBinary || !!conn.driver || !!conn.color || !!conn.debug || !!conn.production
 }
 
 /** Most recently used first; never-used entries last (newest first). */

@@ -7,7 +7,9 @@ import {
   type ConnectionTestResult,
   type DockerComposeProject,
   type DockerConnection,
-  type DockerContainer
+  type DockerContainer,
+  type SshConnection,
+  type SshHost
 } from '@shared/types'
 import { api } from '../api'
 import { uid } from '../utils/id'
@@ -34,19 +36,35 @@ export function isDockerConnection(conn: Connection | null | undefined): conn is
   return conn?.type === 'docker'
 }
 
-/** Where a connection runs, for display: "~/code/shop", "app:/var/www/html" or "app (plain PHP)". */
+export function isSshConnection(conn: Connection | null | undefined): conn is SshConnection {
+  return conn?.type === 'ssh'
+}
+
+/** Code runs somewhere else than this machine (a container or a server). */
+export function isRemoteConnection(conn: Connection | null | undefined): conn is DockerConnection | SshConnection {
+  return isDockerConnection(conn) || isSshConnection(conn)
+}
+
+/**
+ * Where a connection runs, for display: "~/code/shop", "app:/var/www/html", "prod-web:/var/www/shop" or
+ * "app (plain PHP)".
+ */
 export function connectionSubtitle(conn: Connection, home?: string): string {
-  if (isDockerConnection(conn)) return conn.path ? `${conn.container}:${conn.path}` : `${conn.container} (plain PHP)`
+  if (isRemoteConnection(conn)) {
+    const target = isDockerConnection(conn) ? conn.container : conn.host
+    return conn.path ? `${target}:${conn.path}` : `${target} (plain PHP)`
+  }
   return tildify(conn.path, home)
 }
 
 /**
  * Folder on this machine for a connection: the project folder of a local one, the optional `hostPath` of a Docker
- * one ('' when unset). With `inner` (a path inside the container) it maps that path below `path` to `hostPath`.
+ * or SSH one ('' when unset). With `inner` (a path in the container or on the server) it maps that path below
+ * `path` to `hostPath`.
  */
 export function hostPathOf(conn: Connection | null | undefined, inner?: string): string {
   if (!conn) return ''
-  if (!isDockerConnection(conn)) return inner || conn.path
+  if (!isRemoteConnection(conn)) return inner || conn.path
   const host = conn.hostPath?.trim() ?? ''
   if (!host || !inner) return host
   const base = conn.path.replace(/\/+$/, '')
@@ -58,13 +76,16 @@ export function hostPathOf(conn: Connection | null | undefined, inner?: string):
 /** Fields of a Docker connection the form fills in; the store adds id, type and timestamps. */
 export type DockerConnectionInput = Omit<DockerConnection, 'id' | 'type' | 'createdAt' | 'lastUsedAt'> & { id?: string }
 
-function newDockerId(): string {
-  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? `docker-${crypto.randomUUID()}` : uid('docker')
+/** Fields of an SSH connection the form fills in; the store adds id, type and timestamps. */
+export type SshConnectionInput = Omit<SshConnection, 'id' | 'type' | 'createdAt' | 'lastUsedAt'> & { id?: string }
+
+function newConnectionId(type: 'docker' | 'ssh'): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? `${type}-${crypto.randomUUID()}` : uid(type)
 }
 
 /**
- * Project connections: local folders and Docker containers (= recent projects) plus the implicit "Default" (Laravel Sandbox) and "PHP" (plain
- * PHP) connections. A tab's `connectionId` null means "default": Default Working Directory → Sandbox → PHP.
+ * Project connections: local folders, Docker containers and SSH servers (= recent projects) plus the implicit
+ * "Default" (Laravel Sandbox) and "PHP" (plain PHP) connections. A tab's `connectionId` null means "default": Default Working Directory → Sandbox → PHP.
  */
 export const useConnectionsStore = defineStore('connections', () => {
   const connections = ref<Connection[]>([])
@@ -112,7 +133,7 @@ export const useConnectionsStore = defineStore('connections', () => {
   /** Recent projects (folders and containers), most recent first (local plain PHP / sandbox entries excluded). */
   const recent = computed(() =>
     connections.value
-      .filter((c) => (c.type === 'docker' || c.path !== '') && !isImplicitConnection(c.id) && !!c.lastUsedAt)
+      .filter((c) => (c.type !== 'local' || c.path !== '') && !isImplicitConnection(c.id) && !!c.lastUsedAt)
       .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))
   )
 
@@ -129,6 +150,20 @@ export const useConnectionsStore = defineStore('connections', () => {
 
   function isDocker(id: string | null | undefined): boolean {
     return isDockerConnection(byId(id))
+  }
+
+  function isSsh(id: string | null | undefined): boolean {
+    return isSshConnection(byId(id))
+  }
+
+  /** The tab's connection runs in a container or on a server. */
+  function isRemote(id: string | null | undefined): boolean {
+    return isRemoteConnection(byId(id))
+  }
+
+  /** The tab's connection is marked as a live system (runs ask first). */
+  function isProduction(id: string | null | undefined): boolean {
+    return resolve(id)?.production === true
   }
 
   /** Display subtitle of a stored connection ('' for the implicit ones). */
@@ -284,12 +319,38 @@ export const useConnectionsStore = defineStore('connections', () => {
       ...input,
       // Opening without a compose reference drops a stored one.
       compose: input.compose,
-      id: existing?.id ?? input.id ?? newDockerId(),
+      id: existing?.id ?? input.id ?? newConnectionId('docker'),
       type: 'docker',
       createdAt: existing?.createdAt || Date.now(),
       lastUsedAt: Date.now()
     }
     return (await save(conn)) as DockerConnection
+  }
+
+  /**
+   * Save an SSH connection and mark it used. A stored connection to the same host, port and path is reused so
+   * opening it twice does not add a second recent entry.
+   */
+  async function openSsh(input: SshConnectionInput): Promise<SshConnection> {
+    const same = (c: Connection): c is SshConnection =>
+      isSshConnection(c) && c.host === input.host && (c.port ?? 0) === (input.port ?? 0) && c.path === input.path
+    const existing = input.id ? byId(input.id) : connections.value.find(same)
+    const conn: SshConnection = {
+      ...(isSshConnection(existing) ? existing : {}),
+      ...input,
+      // Opening without a port drops a stored one.
+      port: input.port,
+      id: existing?.id ?? input.id ?? newConnectionId('ssh'),
+      type: 'ssh',
+      createdAt: existing?.createdAt || Date.now(),
+      lastUsedAt: Date.now()
+    }
+    return (await save(conn)) as SshConnection
+  }
+
+  /** Host aliases from ~/.ssh/config for the SSH form ([] without a config). */
+  function listSshHosts(): Promise<SshHost[]> {
+    return api.invoke('ssh:hosts')
   }
 
   /** Running containers for the Docker form. Rejects with main's message when Docker is unavailable. */
@@ -364,6 +425,9 @@ export const useConnectionsStore = defineStore('connections', () => {
     byId,
     findByPath,
     isDocker,
+    isSsh,
+    isRemote,
+    isProduction,
     subtitle,
     hostPath,
     label,
@@ -375,6 +439,8 @@ export const useConnectionsStore = defineStore('connections', () => {
     load,
     openLocal,
     openDocker,
+    openSsh,
+    listSshHosts,
     listContainers,
     composeProject,
     composeUp,

@@ -140,7 +140,7 @@ describe('ConnectionsStore persistence & validation', () => {
   })
 
   it('rejects unsupported connection types and relative paths', () => {
-    expect(() => sanitizeConnection({ type: 'ssh', host: 'example.com' })).toThrow(TypeError)
+    expect(() => sanitizeConnection({ type: 'kubernetes', pod: 'web-0' })).toThrow(TypeError)
     expect(() => sanitizeConnection({ type: 'local', path: 'not/absolute' })).toThrow(TypeError)
     expect(() => sanitizeConnection(null)).toThrow(TypeError)
   })
@@ -152,7 +152,7 @@ describe('ConnectionsStore persistence & validation', () => {
       JSON.stringify({
         connections: [
           { id: 'ok', type: 'local', name: 'ok', path: '/ok', createdAt: 1 },
-          { id: 'remote', type: 'ssh', host: 'h', path: '/var/www' },
+          { id: 'remote', type: 'kubernetes', pod: 'web-0', path: '/var/www' },
           { id: 'ok', type: 'local', name: 'duplicate id', path: '/dup', createdAt: 1 },
           'garbage'
         ],

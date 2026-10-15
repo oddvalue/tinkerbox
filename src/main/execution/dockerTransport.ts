@@ -12,14 +12,10 @@ import { phpFlags } from './argv'
 import { DOCKER_MISSING, findDockerCli } from './dockerCli'
 import { listDockerContainers } from './dockerContainers'
 import { DEFAULT_MAX_OUTPUT_BYTES, runCapture, spawnStreaming, summarizeOutput, type ProcessResult } from './process'
+import { PidLineFilter, WRAPPER, killGroupCommand, stripPidLine } from './remoteProcess'
 import type { Transport, TransportRequest, TransportResult } from './transport'
 
-/** Written to stderr by the wrapper before PHP starts; stripped from the output. */
-export const PID_MARKER = '__TINKERBOX_PID__'
-const PID_LINE = new RegExp(`(^|\\n)${PID_MARKER} (\\d+)\\n`)
-
-/** POSIX sh wrapper: report the PID (= process group, see the header), then replace the shell with PHP. */
-const WRAPPER = `printf '${PID_MARKER} %s\\n' "$$" >&2; exec "$0" "$@"`
+export { PID_MARKER, PidLineFilter } from './remoteProcess'
 
 /** Arguments for `docker exec` that run PHP (with `flags`) through the PID-reporting wrapper. */
 export function dockerExecArgs(conn: DockerConnection, flags: string[]): string[] {
@@ -28,45 +24,6 @@ export function dockerExecArgs(conn: DockerConnection, flags: string[]): string[
   if (conn.path) args.push('--workdir', conn.path)
   args.push(conn.container, 'sh', '-c', WRAPPER, conn.phpBinary || 'php', ...flags)
   return args
-}
-
-/**
- * Takes the wrapper's PID line out of the stderr stream. Text before it (Docker's own errors and warnings) is held
- * until the line arrives or the process ends, so a failed attempt can be dropped and retried without showing it.
- */
-export class PidLineFilter {
-  pid: number | null = null
-  private buffer = ''
-  private done = false
-
-  constructor(private readonly forward: (chunk: string) => void) {}
-
-  push(chunk: string): void {
-    if (this.done) {
-      this.forward(chunk)
-      return
-    }
-    this.buffer += chunk
-    const match = PID_LINE.exec(this.buffer)
-    if (!match) return
-    this.pid = Number(match[2])
-    this.done = true
-    const rest = this.buffer.slice(0, match.index + match[1].length) + this.buffer.slice(match.index + match[0].length)
-    this.buffer = ''
-    if (rest) this.forward(rest)
-  }
-
-  /** The process ended: pass on what was held back (or drop it with `discard`). */
-  flush(discard = false): void {
-    if (!this.done && this.buffer && !discard) this.forward(this.buffer)
-    this.done = true
-    this.buffer = ''
-  }
-}
-
-/** Remove the wrapper's PID line from captured stderr. */
-export function stripPidLine(stderr: string): string {
-  return stderr.replace(PID_LINE, '$1')
 }
 
 /** Turn a failed `docker exec` (the wrapper never ran, or PHP could not start) into an actionable message. */
@@ -96,7 +53,7 @@ export function dockerFailure(conn: DockerConnection, exitCode: number | null, s
 function killInContainer(docker: string, conn: DockerConnection, pid: number): void {
   const args = ['exec']
   if (conn.user) args.push('--user', conn.user)
-  args.push(conn.container, 'sh', '-c', `kill -TERM -${pid} 2>/dev/null; sleep 2; kill -KILL -${pid} 2>/dev/null; true`)
+  args.push(conn.container, 'sh', '-c', killGroupCommand(pid))
   void runCapture(docker, args, { timeoutMs: 10_000, allowFailure: true, label: 'docker' }).catch(() => undefined)
 }
 

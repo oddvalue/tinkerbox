@@ -169,6 +169,9 @@ const handlers: Record<CommandId, Handler> = {
   openDockerCompose: () => {
     void useUiStore().openModal('docker', { flow: 'compose', pickFolder: true })
   },
+  openSsh: () => {
+    void useUiStore().openModal('ssh', {})
+  },
   openFile: () => useTabsStore().openFile(),
   saveFile: async () => {
     if (requireCodeTab('save')) await useTabsStore().saveFile()

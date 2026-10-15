@@ -7,6 +7,7 @@ import {
   Command,
   Container,
   FolderOpen,
+  Server,
   Folder,
   Globe,
   Hash,
@@ -70,6 +71,7 @@ const ICONS: Record<string, Component> = {
   command: Command,
   folder: Folder,
   docker: Container,
+  ssh: Server,
   snippet: Bookmark,
   herd: Globe
 }
@@ -153,8 +155,9 @@ const sources = computed<PaletteSources>(() => {
     group: 'folders',
     title: conn.name,
     description: connectionSubtitle(conn, app.homeDir),
-    keywords: conn.type === 'docker' ? `${conn.container} ${conn.path} docker` : conn.path,
-    icon: conn.type === 'docker' ? 'docker' : 'folder',
+    keywords:
+      conn.type === 'docker' ? `${conn.container} ${conn.path} docker` : conn.type === 'ssh' ? `${conn.host} ${conn.path} ssh` : conn.path,
+    icon: conn.type === 'local' ? 'folder' : conn.type,
     color: connections.color(conn.id),
     supportsNewTab: true,
     run: ({ newTab }) => later(() => tabs.openProject(conn, { newTab }))

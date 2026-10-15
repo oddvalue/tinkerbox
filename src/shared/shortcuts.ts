@@ -38,6 +38,7 @@ export const COMMAND_META: Record<CommandId, CommandMeta> = {
   openFolder: { title: 'Open Local Project…', group: 'File', accelerator: 'CmdOrCtrl+O', menu: true },
   openDocker: { title: 'Open Docker Container…', group: 'File', accelerator: '', menu: true },
   openDockerCompose: { title: 'Open Docker Compose Project…', group: 'File', accelerator: '', menu: true },
+  openSsh: { title: 'Open SSH Server…', group: 'File', accelerator: '', menu: true },
   openFile: { title: 'Open File…', group: 'File', accelerator: 'CmdOrCtrl+Shift+O', menu: true },
   saveFile: { title: 'Save File', group: 'File', accelerator: 'CmdOrCtrl+S', menu: true },
   saveFileAs: { title: 'Save File As…', group: 'File', accelerator: 'CmdOrCtrl+Shift+S', menu: true },

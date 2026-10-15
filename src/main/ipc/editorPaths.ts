@@ -4,11 +4,12 @@ import type { Connection } from '../../shared/types'
 /**
  * Resolve a file path reported by PHP for "open in editor". The runner reports project files relative to the
  * project root (ExceptionFormatter), so relative paths are joined with the project directory; absolute paths are
- * returned unchanged. For a Docker connection, paths inside the container's project directory are mapped to its
- * host folder (the bind-mount source); without one they are returned unchanged and will not be found.
+ * returned unchanged. For a Docker or SSH connection, paths inside the remote project directory are mapped to its
+ * folder on this machine (the bind-mount source or a local checkout); without one they are returned unchanged and
+ * will not be found.
  */
 export function localPathForFile(file: string, connection: Connection | null): string {
-  if (connection?.type === 'docker') return hostPathForContainerFile(file, connection.path, connection.hostPath ?? '')
+  if (connection && connection.type !== 'local') return hostPathForContainerFile(file, connection.path, connection.hostPath ?? '')
   if (isAbsolute(file) || /^[A-Za-z]:[\\/]/.test(file)) return file
   if (!connection || !connection.path) return file
   return join(connection.path, file)

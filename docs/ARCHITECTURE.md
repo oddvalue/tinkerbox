@@ -2,9 +2,9 @@
 
 Tinkerbox is an open-source desktop code runner for PHP and Laravel: write code in an editor, run it inside a
 project (booted by a framework driver) and inspect the result, dumps, queries and errors. Code runs on this
-machine with a local PHP binary, or inside a running Docker container.
+machine with a local PHP binary, inside a running Docker container, or on a server over SSH.
 
-> **Roadmap:** more remote transports (SSH, Kubernetes, …) via the Transport extension point (see §2.1).
+> **Roadmap:** more remote transports (Kubernetes, …) via the Transport extension point (see §2.1).
 
 The stack:
 
@@ -424,9 +424,24 @@ keeps `compose: { project, service, dir }`; when its container no longer exists,
 service's current container (found by the compose labels). `dockerCli.ts` locates the CLI for all three. "Open in editor" maps
 container paths below `path` into `hostPath` (`src/main/ipc/editorPaths.ts`).
 
+**SSH transport** (`sshTransport.ts`) runs `SshConnection`s (`host`: an ssh destination or ~/.ssh/config alias,
+optional `port`, `path` on the server, optional local `hostPath`) with the system OpenSSH client (`TINKERBOX_SSH`
+overrides it): `ssh -T -o BatchMode=yes -o ConnectTimeout=10 … -- <host> "exec sh -c '<wrapper>' tinkerbox <path> php
+<flags>"`, bundle on stdin. Login is the user's keys, agent and ssh config; BatchMode turns password and host-key
+prompts into errors, and Tinkerbox stores no credentials. The remote command is read by the user's login shell (sh,
+bash, zsh, fish), so it is only single-quoted words, and the wrapper (cd, PID line, `exec`) runs under `sh`. Stopping a
+run kills the remote process group over a second ssh call, as for Docker (`remoteProcess.ts` holds the shared wrapper
+pieces). Outside Windows, `ControlMaster=auto` with `ControlPersist=60` and a socket in `<tmp>/tinkerbox-ssh-<uid>`
+reuses one connection, so only the first run pays for the handshake. ssh errors (unknown or changed host key, key
+login refused, unknown host, unreachable, missing directory or PHP) reject `run()` with an actionable message.
+`ssh:hosts` (`sshConfig.ts`) lists the Host aliases of ~/.ssh/config (following `Include`) for the connection form.
+
+Any connection can be marked `production`: the renderer shows it in red and asks before each run it starts; background
+data modes (autocompletion, panels, logs) run without asking.
+
 **Extension point: transports.** Execution goes through a small interface, so a transport for another target is a new
 file that calls `registerTransport()`; `runCode`, the data modes and the IPC layer do not change. Other remote
-transports (SSH, Kubernetes, …) are on the roadmap.
+transports (Kubernetes, …) are on the roadmap.
 
 ```ts
 // src/main/execution/transport.ts
@@ -452,7 +467,7 @@ export function transportFor(connection: Connection): Transport
   macOS dock recent folders (`app.addRecentDocument`). Windows: `autoHideMenuBar`.
 - Native menu (Tinkerbox/File/Edit/View/Run/Window/Help) built from `COMMAND_META` + `acceleratorFor()` honoring
   `settings.shortcuts`; items send `menu:command`; rebuilt when shortcuts change. `CmdOrCtrl+R` runs code (no reload role).
-- Persistence in `userData`: `settings.json`, `connections.json` (`{connections}`: local project folders and Docker connections), `snippets.json`,
+- Persistence in `userData`: `settings.json`, `connections.json` (`{connections}`: local project folders, Docker and SSH connections), `snippets.json`,
   `history.json` (cap `historyLimit`), `session.json`, `stats.json`, `window-state.json`. Atomic writes (temp +
   rename), debounced; corrupted JSON → backed up as `*.corrupt-<ts>.json`, defaults used, toast via event.
 - Isolated profile: `--user-data-dir=<dir>` (or `TINKERBOX_USER_DATA_DIR`) is applied with `app.setPath('userData')`

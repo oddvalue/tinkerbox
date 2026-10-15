@@ -239,6 +239,25 @@ recreated under another name.
 Tinkerbox looks for `docker` on PATH and in the usual Docker Desktop, OrbStack and Homebrew folders. Set
 `TINKERBOX_DOCKER` to use another CLI with the same `exec` flags, such as `podman`.
 
+### SSH servers
+
+**File → Open SSH Server…** runs code on a server with your own `ssh` setup: keys, the SSH agent and the hosts in
+`~/.ssh/config` (they are listed in the form). Tinkerbox never asks for or stores a password, so the server must
+accept your key; run `ssh <host>` once in a terminal first to accept its host key. Each run sends the runner over the
+connection to `php` on the server, in the project path you set. Nothing is installed on the server.
+
+- Runs after the first reuse the same SSH connection for 60 seconds, so they start without a new login (not on
+  Windows).
+- Stop and timeouts end the PHP process on the server too.
+- PHP binary: `php` on the server's PATH unless you set another one, such as `/usr/bin/php8.3`.
+- Local folder: an optional checkout of the same project on this machine, so file links in the output open in your
+  editor.
+
+### Production connections
+
+Tick **Production** in a project's connection or PHP settings to mark it as a live system. Its tabs and the footer
+turn red, and Tinkerbox asks before each run. Auto-evaluate and re-running on file changes don't run on it silently.
+
 ### Project snippets
 
 Snippets in `<project>/.tinkerbox/snippets/*.php` show up in the Snippets modal (⌘B) and in Open Anything for
@@ -294,11 +313,11 @@ its files change. The end-to-end test runs the app with an isolated profile and 
 
 ## Roadmap
 
-Code runs through the local transport (a PHP child process) or the Docker transport (`docker exec` into a running
-container). Execution goes through a small `Transport` interface (`src/main/execution/transport.ts`), so other remote
-targets can be added as new transports without changing the runner, the data modes or the UI:
+Code runs through the local transport (a PHP child process), the Docker transport (`docker exec` into a running
+container) or the SSH transport (the system `ssh` client). Execution goes through a small `Transport` interface
+(`src/main/execution/transport.ts`), so other remote targets can be added as new transports without changing the
+runner, the data modes or the UI:
 
-- SSH transport (run against a server's PHP)
 - Kubernetes transport (run inside a pod)
 
 ## License

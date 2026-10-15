@@ -33,7 +33,7 @@ export function isDirectorySync(path: string): boolean {
  * Fields of a stored 'sandbox' / 'scratch' entry the user may customize (e.g. the PHP binary or Xdebug toggle of
  * the Default tab, saved through connections:save with that id).
  */
-type ImplicitOverrides = Partial<Pick<ConnectionBase, 'phpBinary' | 'driver' | 'color' | 'debug' | 'lastUsedAt'>>
+type ImplicitOverrides = Partial<Pick<ConnectionBase, 'phpBinary' | 'driver' | 'color' | 'debug' | 'production' | 'lastUsedAt'>>
 
 function implicitOverrides(stored: Connection | undefined): ImplicitOverrides {
   if (!stored) return {}
@@ -42,6 +42,7 @@ function implicitOverrides(stored: Connection | undefined): ImplicitOverrides {
   if (stored.driver) out.driver = stored.driver
   if (stored.color) out.color = stored.color
   if (stored.debug) out.debug = true
+  if (stored.production) out.production = true
   if (stored.lastUsedAt) out.lastUsedAt = stored.lastUsedAt
   return out
 }

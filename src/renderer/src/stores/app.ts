@@ -32,8 +32,8 @@ export const useAppStore = defineStore('app', () => {
     if (known) return known
     const projects: Connection[] = useConnectionsStore().connections
     for (const conn of projects) {
-      // A Docker path lives in the container; only its host folder says something about this machine.
-      const home = guessHome(conn.type === 'docker' ? conn.hostPath : conn.path)
+      // A Docker or SSH path lives in the container or on the server; only its host folder is on this machine.
+      const home = guessHome(conn.type === 'local' ? conn.path : conn.hostPath)
       if (home) return home
     }
     return undefined

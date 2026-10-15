@@ -2,13 +2,14 @@
  * Extension point: transports (docs/ARCHITECTURE.md §2.1).
  *
  * A transport delivers the bundled PHP script to a PHP process for a connection and returns its
- * output. This build ships the local and Docker transports; others (SSH, Kubernetes…) can be added
+ * output. This build ships the local, Docker and SSH transports; others (Kubernetes…) can be added
  * later as new files that call `registerTransport()` — runCode, the data modes and the IPC layer do not
  * change. The most recently registered transport that `supports()` a connection wins.
  */
 import type { Connection, Settings } from '@shared/types'
 import { dockerTransport } from './dockerTransport'
 import { localTransport } from './localTransport'
+import { sshTransport } from './sshTransport'
 import type { PhpPayload } from './types'
 
 export interface TransportRequest {
@@ -48,7 +49,7 @@ export interface Transport {
   payloadDefaults?(connection: Connection): Partial<Pick<PhpPayload, 'projectPath' | 'driver' | 'homePath'>>
 }
 
-const registry: Transport[] = [localTransport, dockerTransport]
+const registry: Transport[] = [localTransport, dockerTransport, sshTransport]
 
 /** Register (or replace, by id) a transport. Later registrations take precedence. */
 export function registerTransport(transport: Transport): void {

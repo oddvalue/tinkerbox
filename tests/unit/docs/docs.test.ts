@@ -114,10 +114,10 @@ describe('docs/ARCHITECTURE.md', () => {
 
   it('documents only the transports that exist, with other remote ones as a roadmap item', () => {
     const transports = readdirSync(join(ROOT, 'src/main/execution')).filter((f) => /Transport\.ts$/.test(f))
-    expect(transports.sort()).toEqual(['dockerTransport.ts', 'localTransport.ts'])
-    for (const file of transports) expect(text).toContain(`**${file.replace(/^\w/, (c) => c.toUpperCase()).replace(/Transport\.ts$/, ' transport')}** (\`${file}\`)`)
-    expect(text).toContain('**Roadmap:** more remote transports (SSH, Kubernetes, …) via the Transport extension point (see §2.1).')
-    expect(text.match(/\bSSH\b/g)?.length).toBe(2) // the roadmap note and the extension point paragraph
+    expect(transports.sort()).toEqual(['dockerTransport.ts', 'localTransport.ts', 'sshTransport.ts'])
+    // Each transport has its own paragraph: **Local transport** (`localTransport.ts`), **SSH transport** (…)…
+    for (const file of transports) expect(text.toLowerCase()).toContain(`**${file.replace(/Transport\.ts$/, ' transport').toLowerCase()}** (\`${file.toLowerCase()}\`)`)
+    expect(text).toContain('**Roadmap:** more remote transports (Kubernetes, …) via the Transport extension point (see §2.1).')
   })
 })
 

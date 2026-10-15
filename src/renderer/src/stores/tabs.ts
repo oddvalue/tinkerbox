@@ -15,6 +15,7 @@ import { getEditor, type EditorSelection } from '../editorBridge'
 import { uid } from '../utils/id'
 import { cloneJson } from '../utils/merge'
 import { basename } from '../utils/platform'
+import { productionGuard, type RunTrigger } from '../utils/production'
 import { useAppStore } from './app'
 import { useConnectionsStore } from './connections'
 import { useSettingsStore } from './settings'
@@ -47,8 +48,10 @@ export interface RunArgs {
   tabId?: string
   /** Run only the selection (falls back to the whole buffer when nothing is selected). */
   selectionOnly?: boolean
-  /** Triggered by auto-evaluate: whole buffer, no prettify. */
+  /** Triggered by auto-evaluate or a file change: whole buffer, no prettify. */
   auto?: boolean
+  /** What started the run, for the production guard (default: 'auto' with `auto`, else 'manual'). */
+  trigger?: RunTrigger
 }
 
 export interface OpenCodeOptions {
@@ -542,6 +545,9 @@ export const useTabsStore = defineStore('tabs', () => {
       if (!args.auto) await cancel(tab.id)
       return null
     }
+    if (!(await passesProductionGuard(tab, args.trigger ?? (args.auto ? 'auto' : 'manual')))) return null
+    // The tab may have closed or started running while the confirmation was open.
+    if (!byId(tab.id) || isRunning(tab.id)) return null
     const settingsStore = useSettingsStore()
     const settings = settingsStore.settings
     const runId = uid('run')
@@ -608,6 +614,43 @@ export const useTabsStore = defineStore('tabs', () => {
       console.error('applyRunDecorations failed', err)
     }
     return result
+  }
+
+  /** Tabs with an open "Run on production?" dialog, and tabs already told that auto-evaluate is off there. */
+  const confirmingProduction = new Set<string>()
+  const warnedAutoProduction = new Set<string>()
+
+  /** Ask before running on a production connection; auto-evaluate does not run there at all. */
+  async function passesProductionGuard(tab: { id: string; connectionId: string | null }, trigger: RunTrigger): Promise<boolean> {
+    const connections = useConnectionsStore()
+    const guard = productionGuard(connections.resolve(tab.connectionId), trigger)
+    if (guard === 'run') return true
+    const ui = useUiStore()
+    if (guard === 'block') {
+      const key = `${tab.id}:${tab.connectionId ?? ''}`
+      if (!warnedAutoProduction.has(key)) {
+        warnedAutoProduction.add(key)
+        ui.toast({
+          level: 'warning',
+          key: 'production-auto',
+          message: `Auto-evaluate is off for production connections. Run the code yourself to run it on ${connections.label(tab.connectionId)}.`
+        })
+      }
+      return false
+    }
+    if (confirmingProduction.has(tab.id)) return false
+    confirmingProduction.add(tab.id)
+    try {
+      const where = connections.subtitle(connections.effectiveId(tab.connectionId))
+      return await ui.confirm({
+        title: 'Run on production?',
+        message: `${connections.label(tab.connectionId)}${where ? ` (${where})` : ''}`,
+        confirmLabel: 'Run',
+        danger: true
+      })
+    } finally {
+      confirmingProduction.delete(tab.id)
+    }
   }
 
   /** Stop the running script of a tab (its RunResult arrives with `cancelled: true`). */
@@ -756,7 +799,7 @@ export const useTabsStore = defineStore('tabs', () => {
         if (!tab || tab.filePath !== path) return
         if (tab.code !== content) replaceCode(tab.id, content)
         patchTab(tab.id, { dirty: undefined })
-        void run({ tabId: tab.id, auto: true })
+        void run({ tabId: tab.id, auto: true, trigger: 'watch' })
       }),
       api.on('file:opened', ({ path, content }) => {
         openFileContent(path, content)

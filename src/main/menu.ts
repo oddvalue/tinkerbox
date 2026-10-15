@@ -149,6 +149,7 @@ export function buildMenuTemplate(opts: MenuOptions): MenuItemConstructorOptions
       openRecent,
       cmd('openDocker'),
       cmd('openDockerCompose'),
+      cmd('openSsh'),
       cmd('openSandbox'),
       cmd('openFile'),
       sep,

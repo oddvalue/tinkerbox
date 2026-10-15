@@ -19,7 +19,7 @@ import type { LogEntry, LogListing } from '@shared/types'
 import { api } from '../../../api'
 import { executeCommand } from '../../../commands'
 import { useAppStore } from '../../../stores/app'
-import { hostPathOf, isDockerConnection, useConnectionsStore } from '../../../stores/connections'
+import { hostPathOf, isRemoteConnection, useConnectionsStore } from '../../../stores/connections'
 import { useUiStore } from '../../../stores/ui'
 import { formatBytes, pluralize, relativeTime } from '../../../utils/format'
 import { fileManagerName, modKeyLabel, tildify } from '../../../utils/platform'
@@ -93,11 +93,11 @@ let pollInFlight = false
 
 const root = computed(() => listing.value?.root || '')
 const rootDisplay = computed(() => tildify(root.value || projectPath.value, app.homeDir))
-/** Log folder on this machine. A Docker project's logs live in the container; only a host folder can be revealed. */
+/** Log folder on this machine. Docker and SSH logs live elsewhere; only a host folder can be revealed. */
 const revealTarget = computed(() => {
   const target = root.value || projectPath.value
   const conn = connections.resolve(props.connectionId)
-  return isDockerConnection(conn) ? hostPathOf(conn, target) : target
+  return isRemoteConnection(conn) ? hostPathOf(conn, target) : target
 })
 const files = computed(() => listing.value?.files ?? [])
 const groups = computed(() => groupLogFiles(files.value))
@@ -415,7 +415,7 @@ onBeforeUnmount(() => {
                 {{ selectedFile?.name ?? '—' }}
               </span>
               <IconButton
-                v-if="revealTarget || !connections.isDocker(connectionId)"
+                v-if="revealTarget || !connections.isRemote(connectionId)"
                 :icon="FolderSearch"
                 :label="`Open log folder in ${fileManagerName()}`"
                 size="sm"

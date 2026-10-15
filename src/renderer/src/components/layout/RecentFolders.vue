@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Box, Container, Folder, FolderPlus, Trash2 } from 'lucide-vue-next'
+import { Box, Container, Folder, FolderPlus, Server, Trash2 } from 'lucide-vue-next'
 import { executeCommand } from '../../commands'
 import { useAppStore } from '../../stores/app'
 import { useConnectionsStore } from '../../stores/connections'
@@ -31,9 +31,9 @@ function openSandbox(event: MouseEvent): void {
   emit('done')
 }
 
-function openDocker(): void {
+function openRemote(command: 'openDocker' | 'openSsh'): void {
   emit('done')
-  void executeCommand('openDocker')
+  void executeCommand(command)
 }
 
 async function clear(): Promise<void> {
@@ -60,9 +60,19 @@ async function clear(): Promise<void> {
           title="Open Docker container…"
           aria-label="Open Docker container"
           data-testid="recent-open-docker"
-          @click="openDocker"
+          @click="openRemote('openDocker')"
         >
           <Container :size="13" />
+        </button>
+        <button
+          type="button"
+          class="flex items-center rounded-md px-1.5 py-1 text-accent hover:bg-accent-soft"
+          title="Open SSH server…"
+          aria-label="Open SSH server"
+          data-testid="recent-open-ssh"
+          @click="openRemote('openSsh')"
+        >
+          <Server :size="13" />
         </button>
       </div>
     </div>
@@ -88,6 +98,7 @@ async function clear(): Promise<void> {
             :style="{ color: connections.color(conn.id), backgroundColor: `color-mix(in srgb, ${connections.color(conn.id)} 14%, transparent)` }"
           >
             <Container v-if="conn.type === 'docker'" :size="15" />
+            <Server v-else-if="conn.type === 'ssh'" :size="15" />
             <Folder v-else :size="15" />
           </span>
           <span class="min-w-0 flex-1">

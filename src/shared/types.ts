@@ -10,12 +10,12 @@
 // Connections
 //
 // Local projects, the Laravel Sandbox and plain PHP run on this machine; Docker connections run
-// inside a running container (`docker exec`). Other remote targets (SSH, Kubernetes, Vapor, Laravel
-// Cloud) can be added as new `Connection` variants + execution transports (see docs/ARCHITECTURE.md
-// "Extension point: transports").
+// inside a running container (`docker exec`) and SSH connections on a server (the system `ssh`
+// client). Other remote targets can be added as new `Connection` variants + execution transports
+// (see docs/ARCHITECTURE.md "Extension point: transports").
 // ---------------------------------------------------------------------------
 
-export type ConnectionType = 'local' | 'docker'
+export type ConnectionType = 'local' | 'docker' | 'ssh'
 
 export interface ConnectionBase {
   id: string
@@ -32,6 +32,8 @@ export interface ConnectionBase {
   lastUsedAt?: number
   /** Xdebug step debugging toggled for this project. */
   debug?: boolean
+  /** A live system: the UI marks it and asks before each run. */
+  production?: boolean
 }
 
 export interface LocalConnection extends ConnectionBase {
@@ -69,7 +71,32 @@ export interface DockerComposeRef {
   dir: string
 }
 
-export type Connection = LocalConnection | DockerConnection
+export interface SshConnection extends ConnectionBase {
+  type: 'ssh'
+  /**
+   * `ssh` destination: a Host alias from ~/.ssh/config, `host` or `user@host`. Login uses the system client
+   * (keys, agent, config); Tinkerbox never asks for or stores a password.
+   */
+  host: string
+  /** Port when it is not 22 / not set in ~/.ssh/config. */
+  port?: number
+  /** Absolute project directory on the server. '' => plain PHP in the login directory. */
+  path: string
+  /** Optional local checkout of the same project, used to open files in the editor; '' => none. */
+  hostPath?: string
+}
+
+export type Connection = LocalConnection | DockerConnection | SshConnection
+
+/** A Host entry from ~/.ssh/config (`ssh:hosts`), offered in the SSH connection form. */
+export interface SshHost {
+  /** The alias after `Host`. */
+  alias: string
+  /** `HostName`, `User`, `Port` from the same block ('' / 0 when unset). */
+  hostName: string
+  user: string
+  port: number
+}
 
 /** A running container offered in the Docker connection form (`docker:containers`). */
 export interface DockerContainer {

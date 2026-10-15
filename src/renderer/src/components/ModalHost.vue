@@ -19,6 +19,7 @@ const MODALS: Record<ModalName, Component> = {
   panels: defineAsyncComponent(() => import('./modals/panels/PanelsModal.vue')),
   php: defineAsyncComponent(() => import('./modals/php/PhpSettingsModal.vue')),
   docker: defineAsyncComponent(() => import('./modals/docker/DockerConnectionModal.vue')),
+  ssh: defineAsyncComponent(() => import('./modals/ssh/SshConnectionModal.vue')),
   wrapped: defineAsyncComponent(() => import('./modals/wrapped/WrappedModal.vue')),
   share: defineAsyncComponent(() => import('./modals/share/ShareGistModal.vue')),
   tablePreview: defineAsyncComponent(() => import('./output/TablePreviewModal.vue')),

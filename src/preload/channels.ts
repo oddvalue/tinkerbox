@@ -25,6 +25,7 @@ export const INVOKE_CHANNELS = [
   'docker:containers',
   'docker:composeProject',
   'docker:composeUp',
+  'ssh:hosts',
   'sandbox:status',
   'sandbox:install',
   'run:start',
