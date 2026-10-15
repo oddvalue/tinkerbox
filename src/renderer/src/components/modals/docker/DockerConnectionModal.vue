@@ -240,13 +240,18 @@ async function startService(service: DockerComposeService): Promise<void> {
   }
 }
 
-/** Folder of the active tab's local project, to look for a compose file there. */
+/**
+ * Folder on this machine behind the active tab, to look for a compose file there: a local project, or the compose
+ * folder / host folder of a Docker connection. Never a path that only exists inside a container or on a server.
+ */
 function activeProjectDir(): string {
   const tab = tabs.activeTab
   if (tab?.kind !== 'code') return ''
   const id = connections.effectiveId(tab.connectionId)
-  if (isImplicitConnection(id) || connections.isDocker(id)) return ''
-  return connections.path(tab.connectionId)
+  const conn = isImplicitConnection(id) ? undefined : connections.byId(id)
+  if (!conn) return ''
+  if (conn.type === 'docker') return conn.compose?.dir || conn.hostPath || ''
+  return conn.type === 'local' ? conn.path : ''
 }
 
 function validate(): boolean {

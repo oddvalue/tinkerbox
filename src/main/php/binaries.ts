@@ -251,7 +251,11 @@ export async function resolvePhpBinary(settings: Settings, connection?: Connecti
   const path = locatePhpBinary(requested)
   if (!path) {
     const hint = isHerdAlias(requested) && !herdPaths() ? ' (Herd aliases need Laravel Herd)' : ''
-    throw new Error(`PHP binary not found: ${requested}${hint}`)
+    // A wrapper command such as `./sail php` or `tm php`: arguments are not supported here.
+    const command = /\s/.test(requested)
+      ? '. Set the path of a php executable, not a command with arguments. For PHP that runs in Docker or on a server, open the project with File → Open Docker Container… or Open SSH Server… instead.'
+      : ''
+    throw new Error(`PHP binary not found: ${requested}${hint}${command}`)
   }
   return { path, env }
 }
