@@ -54,6 +54,8 @@ import { SettingsStore } from './store/settings'
 import { SnippetsStore } from './store/snippets'
 import { StatsStore } from './store/stats'
 import { chromeColorsFor, effectiveThemeId, listCustomThemes } from './themes'
+import { McpController } from './mcp'
+import { createMcpDeps } from './mcp/deps'
 import { appUrls, applyChromeColors, createMainWindow, installSessionGuards, isAppUrl } from './windows'
 import type { ExecutionContext } from './execution/types'
 
@@ -480,6 +482,7 @@ function startShell(envReady: Promise<void>): { openTarget(target: OpenTarget): 
     if (!sameJson(next.shortcuts, prev.shortcuts)) rebuildMenus()
     if (next.phpBinary !== prev.phpBinary) invalidateCaches()
     if (next.historyLimit !== prev.historyLimit) history.setLimit(next.historyLimit)
+    if (!sameJson(next.mcp, prev.mcp)) void ctx.mcp.apply()
     if (
       next.theme !== prev.theme ||
       next.syncThemeWithOs !== prev.syncThemeWithOs ||
@@ -550,8 +553,17 @@ function startShell(envReady: Promise<void>): { openTarget(target: OpenTarget): 
       applyChrome()
     },
     cliEnvironment,
-    appInfo
+    appInfo,
+    // Set right below: the MCP server's tools need the finished context.
+    mcp: undefined as unknown as McpController
   }
+  ctx.mcp = new McpController({
+    deps: createMcpDeps(ctx),
+    version: app.getVersion(),
+    logger,
+    getSettings: () => settings.get(),
+    saveToken: (token) => settings.update({ mcp: { token } })
+  })
 
   const isTrustedSender = (event: IpcMainInvokeEvent): boolean => {
     const frame = event.senderFrame
@@ -575,6 +587,7 @@ function startShell(envReady: Promise<void>): { openTarget(target: OpenTarget): 
   } catch (err) {
     logger.warn('Could not refresh the installed CLI helper:', err)
   }
+  void ctx.mcp.apply()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -589,6 +602,7 @@ function startShell(envReady: Promise<void>): { openTarget(target: OpenTarget): 
   app.on('will-quit', () => {
     flushStores()
     watchers.disposeAll()
+    void ctx.mcp.dispose()
     try {
       disposeExecution()
     } catch (err) {

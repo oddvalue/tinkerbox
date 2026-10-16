@@ -7,7 +7,10 @@ import { mergeTyped, type MergeRules } from './merge'
 import { maskSecret, type SecretBox } from './secrets'
 
 /** Settings paths holding secrets (encrypted at rest, masked for the renderer). */
-export const SETTINGS_SECRET_PATHS = [['github', 'token']] as const
+export const SETTINGS_SECRET_PATHS = [
+  ['github', 'token'],
+  ['mcp', 'token']
+] as const
 
 const COMMAND_IDS = new Set<string>(COMMANDS)
 
@@ -31,7 +34,8 @@ export const SETTINGS_RULES: MergeRules = {
     maxItems: { min: 1, max: 100_000, integer: true },
     maxStringLength: { min: 16, max: 10_000_000, integer: true },
     timeoutMs: { min: 1_000, max: 86_400_000, integer: true },
-    historyLimit: { min: 0, max: 10_000, integer: true }
+    historyLimit: { min: 0, max: 10_000, integer: true },
+    'mcp.port': { min: 1024, max: 65_535, integer: true }
   },
   records: {
     shortcuts: { maxKeys: COMMANDS.length, maxValueLength: 100, allowKey: (key) => COMMAND_IDS.has(key) }

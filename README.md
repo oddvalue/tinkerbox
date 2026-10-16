@@ -258,6 +258,25 @@ connection to `php` on the server, in the project path you set. Nothing is insta
 Tick **Production** in a project's connection or PHP settings to mark it as a live system. Its tabs and the footer
 turn red, and Tinkerbox asks before each run. Auto-evaluate and re-running on file changes don't run on it silently.
 
+### MCP server
+
+Tinkerbox can let coding agents such as Claude Code run PHP in your projects. Turn on **Settings → Advanced → MCP
+server**, then run the command shown there once, for example:
+
+```sh
+claude mcp add --transport http tinkerbox http://127.0.0.1:47474/mcp --header "Authorization: Bearer <token>"
+```
+
+The tool can then list your projects (local folders, Docker containers, SSH servers, the Laravel Sandbox and plain
+PHP), run code in one with the framework booted, check its PHP and framework version, and read its log files. Results
+are the same text the app copies with Copy output: echo output, dumps, SQL queries, exceptions and the return value.
+
+- The server listens on 127.0.0.1 only, and every request needs the token from Settings. Requests from web pages are
+  refused. **New token** replaces it; tools set up with the old one stop working.
+- Runs show up in History like your own.
+- On a project marked as production, Tinkerbox shows the code and asks you before each run.
+- The code runs for real against the project's database and services, like code you type.
+
 ### Project snippets
 
 Snippets in `<project>/.tinkerbox/snippets/*.php` show up in the Snippets modal (⌘B) and in Open Anything for

@@ -6,6 +6,7 @@ import type {
   ConnectionTestResult,
   CustomTheme,
   DockerComposeProject,
+  McpStatus,
   DockerContainer,
   EnvironmentInfo,
   HerdSite,
@@ -67,6 +68,12 @@ export interface InvokeChannels {
   'docker:composeUp': [[dir: string, service: string], DockerComposeProject]
   /** Host aliases from ~/.ssh/config (and its Include files); [] when there is none. */
   'ssh:hosts': [[], SshHost[]]
+
+  // MCP server ----------------------------------------------------------------------------------------------
+  /** Whether the MCP server runs, its URL, token and the `claude mcp add` command. */
+  'mcp:status': [[], McpStatus]
+  /** Replace the bearer token (connected clients must be set up again). */
+  'mcp:regenerateToken': [[], McpStatus]
 
   // Laravel Sandbox -------------------------------------------------------------------
   'sandbox:status': [[], SandboxStatus]

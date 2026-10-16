@@ -48,6 +48,16 @@ export function coreHandlers(ctx: ShellContext) {
     'settings:update': (_e, patch) => ctx.settings.update(obj(patch, 'patch')),
     'settings:reset': () => ctx.settings.reset(),
 
+    // MCP server -------------------------------------------------------------------------------------------
+    'mcp:status': async () => {
+      await ctx.mcp.settled()
+      return ctx.mcp.status()
+    },
+    'mcp:regenerateToken': async () => {
+      await ctx.mcp.settled()
+      return ctx.mcp.regenerateToken()
+    },
+
     // Connections ------------------------------------------------------------------------------------------
     'connections:list': () => ctx.connections.list(),
     'connections:save': (_e, connection) => {

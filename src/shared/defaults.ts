@@ -60,7 +60,8 @@ export const DEFAULT_SETTINGS: Settings = {
   vimMode: false,
   historyLimit: 150,
   collision: true,
-  github: { token: '' }
+  github: { token: '' },
+  mcp: { enabled: false, port: 47474, token: '' }
 }
 
 /** Run options for a tab; `captureQueries` follows the tab's SQL toggle. */

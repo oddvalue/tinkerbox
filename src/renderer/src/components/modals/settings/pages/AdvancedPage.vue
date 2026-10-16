@@ -11,6 +11,7 @@ import Button from '../../../common/Button.vue'
 import TextInput from '../../../common/TextInput.vue'
 import Toggle from '../../../common/Toggle.vue'
 import NumberField from '../NumberField.vue'
+import McpServerGroup from './McpServerGroup.vue'
 import SettingsGroup from '../SettingsGroup.vue'
 import SettingsRow from '../SettingsRow.vue'
 import { useSetting } from '../useSetting'
@@ -107,7 +108,7 @@ function openTokenPage(): void {
 async function resetAll(): Promise<void> {
   const ok = await ui.confirm({
     title: 'Reset all settings?',
-    message: 'Every setting — including shortcuts, themes and the GitHub token — goes back to its default. Your snippets, history and recent folders stay.',
+    message: 'Every setting — including shortcuts, themes, the GitHub token and the MCP server — goes back to its default. Your snippets, history and recent folders stay.',
     confirmLabel: 'Reset settings',
     danger: true
   })
@@ -161,6 +162,8 @@ async function resetAll(): Promise<void> {
         </template>
       </SettingsRow>
     </SettingsGroup>
+
+    <McpServerGroup />
 
     <SettingsGroup title="Sharing">
       <SettingsRow

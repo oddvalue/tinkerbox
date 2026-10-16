@@ -44,7 +44,7 @@ The area codes are used in the section headings below and in `docs/FEATURES.md`.
 | **P4 data modes** | `resources/php/src/{Introspector,LogReader,Panels,ProjectSnippets}.php`, `tests/php/data/**` |
 | **E1 execution** | `src/main/execution/**`, `src/main/php/**`, `src/main/env/**`, `src/main/sandbox/**`, `scripts/prepare-sandbox.mjs`, `tests/unit/execution/**` |
 | **E2 shell** | `src/main/index.ts`, `src/main/{menu,windows,deeplinks,cli,themes,paths}.ts`, `src/main/ipc/**`, `src/main/store/**`, `src/preload/**`, `resources/bin/**`, `tests/unit/shell/**` |
-| **E3 integrations** | `src/main/integrations/{editorLinks,gist}.ts`, `tests/unit/integrations/**` |
+| **E3 integrations** | `src/main/integrations/{editorLinks,gist}.ts`, `src/main/mcp/**`, `tests/unit/integrations/**`, `tests/unit/shell/mcp.test.ts` |
 | **R1 renderer shell** | everything under `src/renderer/` except the folders below: stores, api, commands, themes, layout, common components, the Get started tab (`docs/RENDERER.md`) |
 | **R2 editor** | `src/renderer/src/components/editor/**`, `src/renderer/src/monaco/**` |
 | **R3 output** | `src/renderer/src/components/output/**` |
@@ -438,6 +438,18 @@ login refused, unknown host, unreachable, missing directory or PHP) reject `run(
 
 Any connection can be marked `production`: the renderer shows it in red and asks before each run it starts; background
 data modes (autocompletion, panels, logs) run without asking.
+
+**MCP server** (`src/main/mcp/`, off by default, `settings.mcp`). An MCP server for coding agents on
+`http://127.0.0.1:<port>/mcp`: Streamable HTTP with plain JSON responses and no sessions, built on the official SDK
+(`@modelcontextprotocol/sdk`). Each request gets a fresh `McpServer` and transport. `server.ts` refuses, before the SDK
+sees them, requests with an `Origin` header (web pages), a `Host` other than 127.0.0.1 / localhost (DNS rebinding) or
+without `Authorization: Bearer <settings.mcp.token>` (compared in constant time). `index.ts` (`McpController`) follows
+the settings, creates the token on first use (sealed like the GitHub token) and serves `mcp:status` /
+`mcp:regenerateToken` for Settings → Advanced. `tools.ts` holds the tools, with everything injected (`McpDeps`, built
+from the shell context in `deps.ts`): `list_projects`, `run_php` (through `RunService.run`, so runs land in History;
+unique `mcp-<uuid>` run ids, tab id `mcp`), `project_info` (`testConnection`), `list_logs` and `read_log`. Run results
+are rendered with `resultToText` from `src/shared/text/dumpText.ts`, the formatter behind Copy output. A run on a
+`production` connection first shows a native confirmation with the code; declining returns a tool error.
 
 **Extension point: transports.** Execution goes through a small interface, so a transport for another target is a new
 file that calls `registerTransport()`; `runCode`, the data modes and the IPC layer do not change. Other remote

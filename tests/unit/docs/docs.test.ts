@@ -80,7 +80,7 @@ describe.each(DOCS)('%s', (file) => {
   })
 
   it('does not describe features the app does not have', () => {
-    for (const term of [/\bssh2\b/, /\bMCP\b/, /\bForge\b/, /\bVapor\b/, /Laravel Cloud/, /\bkubectl\b/, /\bAI\b/, /\bCHAT\b/, /\bR6\b/]) {
+    for (const term of [/\bssh2\b/, /\bForge\b/, /\bVapor\b/, /Laravel Cloud/, /\bkubectl\b/, /\bAI\b/, /\bCHAT\b/, /\bR6\b/]) {
       expect(text, `${file} mentions ${term}`).not.toMatch(term)
     }
   })

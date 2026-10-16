@@ -1,3 +1,4 @@
+import type { McpController } from '../mcp'
 import type { BrowserWindow, WebContents } from 'electron'
 import type { EventChannel, EventChannels } from '../../shared/ipc'
 import type { AppInfo, CustomTheme } from '../../shared/types'
@@ -46,6 +47,8 @@ export interface ShellContext {
   customThemesChanged(themes: CustomTheme[]): void
   cliEnvironment(): CliEnvironment
   appInfo(): AppInfo
+  /** MCP server for coding agents (follows settings.mcp). */
+  mcp: McpController
 }
 
 /** Send an event to one renderer, ignoring destroyed web contents (window closed mid-operation). */
