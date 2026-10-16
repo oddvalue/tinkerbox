@@ -1,6 +1,7 @@
 /**
  * McpDeps backed by the running app: saved connections, the run service (so MCP runs show up in History and the
- * stats like editor runs), the execution data modes, and a native confirmation for production connections.
+ * stats like editor runs), the execution data modes, the renderer's tabs (through McpUiBridge) and a native
+ * confirmation for runs without a tab.
  */
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow, dialog } from 'electron'
@@ -9,13 +10,14 @@ import { SANDBOX_CONNECTION_ID, SCRATCH_CONNECTION_ID, type Connection, type Run
 import { listLogs, readLog, testConnection } from '../execution'
 import type { ShellContext } from '../ipc/context'
 import { connectionTarget, type McpDeps } from './tools'
+import type { McpUiBridge } from './uiBridge'
 
 /** History entries and run ids of MCP runs use this tab id. */
 export const MCP_TAB_ID = 'mcp'
 
 const CODE_PREVIEW_CHARS = 1500
 
-async function confirmProduction(conn: Connection, code: string): Promise<boolean> {
+async function confirmRun(conn: Connection, code: string, client: string): Promise<boolean> {
   const parent = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null
   if (parent) {
     if (parent.isMinimized()) parent.restore()
@@ -29,15 +31,15 @@ async function confirmProduction(conn: Connection, code: string): Promise<boolea
     defaultId: 0,
     cancelId: 0,
     noLink: true,
-    title: 'Run on production?',
-    message: `An MCP client wants to run code on the production project ${conn.name}`,
+    title: conn.production ? 'Run on production?' : 'Run code from an agent?',
+    message: `${client} wants to run code on ${conn.production ? 'the production project ' : ''}${conn.name}`,
     detail: `${connectionTarget(conn)}\n\n${preview}`
   }
   const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options)
   return response === 1
 }
 
-export function createMcpDeps(ctx: ShellContext): McpDeps {
+export function createMcpDeps(ctx: ShellContext, bridge: McpUiBridge): McpDeps {
   const ready = async <T>(fn: () => Promise<T>): Promise<T> => {
     await ctx.envReady
     return fn()
@@ -50,6 +52,7 @@ export function createMcpDeps(ctx: ShellContext): McpDeps {
       return [...implicit, ...saved]
     },
     defaultProject: () => ctx.exec.resolveConnection(null),
+    runPolicy: () => ctx.settings.get().mcp.runPolicy,
     run: (conn, code, timeoutMs) => {
       const settings = ctx.settings.get()
       const options = runOptionsFromSettings(settings, true)
@@ -61,6 +64,7 @@ export function createMcpDeps(ctx: ShellContext): McpDeps {
     test: (conn) => ready(() => testConnection(ctx.exec, conn)),
     listLogs: (conn) => ready(() => listLogs(ctx.exec, conn.id)),
     readLog: (conn, file, limit) => ready(() => readLog(ctx.exec, { connectionId: conn.id, file, limit })),
-    confirmProduction
+    confirmRun,
+    ui: (request, timeoutMs) => bridge.request(request, timeoutMs)
   }
 }

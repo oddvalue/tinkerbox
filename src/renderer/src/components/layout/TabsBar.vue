@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch, type ComponentPublicInstance } from 'vue'
-import { Copy, Eye, Pencil, Plus, Rocket, X, XCircle } from 'lucide-vue-next'
+import { Bot, Copy, Eye, Pencil, Plus, Rocket, X, XCircle } from 'lucide-vue-next'
 import type { TabState } from '@shared/types'
+import { useAgentTabsStore } from '../../mcp/bridge'
 import { useConnectionsStore } from '../../stores/connections'
 import { useSettingsStore } from '../../stores/settings'
 import { useTabsStore } from '../../stores/tabs'
@@ -20,6 +21,7 @@ const tabs = useTabsStore()
 const ui = useUiStore()
 const settings = useSettingsStore()
 const connections = useConnectionsStore()
+const agentTabs = useAgentTabsStore()
 
 const strip = ref<HTMLElement | null>(null)
 const renameInput = ref<HTMLInputElement | null>(null)
@@ -299,6 +301,14 @@ watch(
           :title="badgeTitle(tab)"
         />
         <Eye v-if="tabs.watching[tab.id]" :size="13" class="shrink-0 text-accent" />
+        <span
+          v-if="agentTabs.preparedBy(tab.id)"
+          class="flex shrink-0 text-accent"
+          :title="`Code from ${agentTabs.preparedBy(tab.id)}. Review it, then run it.`"
+          data-testid="tab-agent"
+        >
+          <Bot :size="13" :aria-label="`Code from ${agentTabs.preparedBy(tab.id)}`" />
+        </span>
         <input
           v-if="ui.renamingTabId === tab.id"
           :ref="setRenameInput"

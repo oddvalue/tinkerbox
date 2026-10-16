@@ -1,17 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { Check, CircleCheck, CircleX, Copy, RefreshCw } from 'lucide-vue-next'
-import type { McpStatus } from '@shared/types'
+import type { McpRunPolicy, McpStatus } from '@shared/types'
 import { api } from '@/api'
 import { useSettingsStore } from '@/stores/settings'
 import { useUiStore } from '@/stores/ui'
 import Button from '../../../common/Button.vue'
+import Select from '../../../common/Select.vue'
 import Toggle from '../../../common/Toggle.vue'
+import type { SelectOption } from '../../../common/types'
 import NumberField from '../NumberField.vue'
 import SettingsGroup from '../SettingsGroup.vue'
 import SettingsRow from '../SettingsRow.vue'
 
-/** Advanced → MCP server: turn the server on, pick the port, copy the `claude mcp add` command. */
+/**
+ * Advanced → MCP server: turn the server on, pick the port and whether agents may run code, copy the `claude mcp add`
+ * command.
+ */
 const settings = useSettingsStore()
 const ui = useUiStore()
 
@@ -27,6 +32,23 @@ const port = computed({
   get: () => settings.settings.mcp.port,
   set: (value: number) => void change({ port: value })
 })
+const runPolicy = computed({
+  get: () => settings.settings.mcp.runPolicy,
+  set: (value: McpRunPolicy | undefined) => {
+    if (value) void change({ runPolicy: value })
+  }
+})
+
+const RUN_POLICIES: SelectOption<McpRunPolicy>[] = [
+  { value: 'review', label: 'No, I run it' },
+  { value: 'ask', label: 'After I confirm' },
+  { value: 'allow', label: 'Without asking' }
+]
+const RUN_POLICY_NOTES: Record<McpRunPolicy, string> = {
+  review: 'Agents prepare code in tabs; you review and run it.',
+  ask: 'Agents can run the code in a tab after you confirm each run.',
+  allow: 'Agents run the code in a tab without asking. Production projects still ask.'
+}
 
 async function refresh(): Promise<void> {
   try {
@@ -36,7 +58,7 @@ async function refresh(): Promise<void> {
   }
 }
 
-async function change(patch: { enabled?: boolean; port?: number }): Promise<void> {
+async function change(patch: { enabled?: boolean; port?: number; runPolicy?: McpRunPolicy }): Promise<void> {
   busy.value = true
   try {
     await settings.update({ mcp: patch })
@@ -76,12 +98,15 @@ onMounted(() => void refresh())
   <SettingsGroup title="MCP server">
     <SettingsRow
       label="MCP server"
-      description="Let coding agents such as Claude Code run PHP in your projects, check them and read their logs through Tinkerbox. It listens on this computer only and needs a token."
+      description="Let coding agents such as Claude Code open tabs with code for you to review and run, read the results, check your projects and read their logs. It listens on this computer only and needs a token."
     >
       <Toggle v-model="enabled" :disabled="busy" data-testid="mcp-enabled" />
     </SettingsRow>
     <SettingsRow label="Port" description="Local port the server listens on (127.0.0.1).">
       <NumberField v-model="port" :min="1024" :max="65535" integer width="96px" aria-label="MCP server port" :disabled="busy" />
+    </SettingsRow>
+    <SettingsRow label="Agents can run code" :description="RUN_POLICY_NOTES[runPolicy]">
+      <Select v-model="runPolicy" :options="RUN_POLICIES" size="sm" aria-label="Agents can run code" :disabled="busy" data-testid="mcp-run-policy" />
     </SettingsRow>
     <SettingsRow v-if="enabled && status" label="Connect" description="Run this once in a terminal to add Tinkerbox to Claude Code. Other MCP clients take the same URL and header." stacked>
       <div

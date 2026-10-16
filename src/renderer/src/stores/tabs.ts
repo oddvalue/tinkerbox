@@ -52,6 +52,8 @@ export interface RunArgs {
   auto?: boolean
   /** What started the run, for the production guard (default: 'auto' with `auto`, else 'manual'). */
   trigger?: RunTrigger
+  /** The user already agreed to this run in a dialog that named the project (MCP): skip the production confirm. */
+  confirmed?: boolean
 }
 
 export interface OpenCodeOptions {
@@ -545,7 +547,7 @@ export const useTabsStore = defineStore('tabs', () => {
       if (!args.auto) await cancel(tab.id)
       return null
     }
-    if (!(await passesProductionGuard(tab, args.trigger ?? (args.auto ? 'auto' : 'manual')))) return null
+    if (!args.confirmed && !(await passesProductionGuard(tab, args.trigger ?? (args.auto ? 'auto' : 'manual')))) return null
     // The tab may have closed or started running while the confirmation was open.
     if (!byId(tab.id) || isRunning(tab.id)) return null
     const settingsStore = useSettingsStore()

@@ -61,7 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
   historyLimit: 150,
   collision: true,
   github: { token: '' },
-  mcp: { enabled: false, port: 47474, token: '' }
+  mcp: { enabled: false, port: 47474, token: '', runPolicy: 'review' }
 }
 
 /** Run options for a tab; `captureQueries` follows the tab's SQL toggle. */

@@ -1,5 +1,6 @@
 import { api } from './api'
 import { installCommands } from './commands'
+import { installMcpBridge } from './mcp/bridge'
 import { useAppStore } from './stores/app'
 import { useConnectionsStore } from './stores/connections'
 import { useSettingsStore } from './stores/settings'
@@ -11,7 +12,8 @@ import { platform } from './utils/platform'
 /**
  * Startup, in two phases so the first paint already has the right theme:
  *  1. `prepare()` (before mount): settings + theme.
- *  2. `start()` (after mount): commands, events, app info, recent projects, session restore.
+ *  2. `start()` (after mount): commands, events, app info, recent projects, session restore, then the MCP bridge
+ *     (agents act on tabs, so it starts once they are restored).
  * Requires an active Pinia.
  */
 
@@ -36,4 +38,5 @@ export async function start(): Promise<void> {
   })
   await Promise.all([useAppStore().load(), useConnectionsStore().load()])
   await useTabsStore().init()
+  installMcpBridge()
 }

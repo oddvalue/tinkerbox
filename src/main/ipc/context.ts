@@ -1,4 +1,5 @@
 import type { McpController } from '../mcp'
+import type { McpUiBridge } from '../mcp/uiBridge'
 import type { BrowserWindow, WebContents } from 'electron'
 import type { EventChannel, EventChannels } from '../../shared/ipc'
 import type { AppInfo, CustomTheme } from '../../shared/types'
@@ -49,6 +50,8 @@ export interface ShellContext {
   appInfo(): AppInfo
   /** MCP server for coding agents (follows settings.mcp). */
   mcp: McpController
+  /** The MCP server's requests to the renderer (tabs); answered through `mcp:respond`. */
+  mcpUi: McpUiBridge
 }
 
 /** Send an event to one renderer, ignoring destroyed web contents (window closed mid-operation). */

@@ -20,7 +20,8 @@ export const SETTINGS_RULES: MergeRules = {
     layout: ['vertical', 'horizontal'],
     prettierQuoteStyle: ['single', 'double'],
     defaultOutputMode: ['detail', 'cli'],
-    outputType: ['buffered', 'realtime']
+    outputType: ['buffered', 'realtime'],
+    'mcp.runPolicy': ['review', 'ask', 'allow']
   },
   ranges: {
     editorFontSize: { min: 6, max: 72 },

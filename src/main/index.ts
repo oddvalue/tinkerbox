@@ -56,6 +56,7 @@ import { StatsStore } from './store/stats'
 import { chromeColorsFor, effectiveThemeId, listCustomThemes } from './themes'
 import { McpController } from './mcp'
 import { createMcpDeps } from './mcp/deps'
+import { McpUiBridge } from './mcp/uiBridge'
 import { appUrls, applyChromeColors, createMainWindow, installSessionGuards, isAppUrl } from './windows'
 import type { ExecutionContext } from './execution/types'
 
@@ -555,10 +556,12 @@ function startShell(envReady: Promise<void>): { openTarget(target: OpenTarget): 
     cliEnvironment,
     appInfo,
     // Set right below: the MCP server's tools need the finished context.
-    mcp: undefined as unknown as McpController
+    mcp: undefined as unknown as McpController,
+    // Requests wait in the delivery queue until the renderer listens; the ones that change the view focus the window.
+    mcpUi: new McpUiBridge((id, request, focus) => deliver({ channel: 'mcp:request', payload: { id, request } }, { focus }))
   }
   ctx.mcp = new McpController({
-    deps: createMcpDeps(ctx),
+    deps: createMcpDeps(ctx, ctx.mcpUi),
     version: app.getVersion(),
     logger,
     getSettings: () => settings.get(),
@@ -602,6 +605,7 @@ function startShell(envReady: Promise<void>): { openTarget(target: OpenTarget): 
   app.on('will-quit', () => {
     flushStores()
     watchers.disposeAll()
+    ctx.mcpUi.dispose()
     void ctx.mcp.dispose()
     try {
       disposeExecution()

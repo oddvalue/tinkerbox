@@ -28,6 +28,7 @@ export const INVOKE_CHANNELS = [
   'ssh:hosts',
   'mcp:status',
   'mcp:regenerateToken',
+  'mcp:respond',
   'sandbox:status',
   'sandbox:install',
   'run:start',
@@ -72,6 +73,7 @@ export const INVOKE_CHANNELS = [
 export const EVENT_CHANNELS = [
   'run:progress',
   'menu:command',
+  'mcp:request',
   'settings:changed',
   'connections:changed',
   'history:changed',

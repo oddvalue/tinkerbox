@@ -267,14 +267,23 @@ server**, then run the command shown there once, for example:
 claude mcp add --transport http --scope user tinkerbox http://127.0.0.1:47474/mcp --header "Authorization: Bearer <token>"
 ```
 
-The tool can then list your projects (local folders, Docker containers, SSH servers, the Laravel Sandbox and plain
-PHP), run code in one with the framework booted, check its PHP and framework version, and read its log files. Results
-are the same text the app copies with Copy output: echo output, dumps, SQL queries, exceptions and the return value.
+The agent works through the app rather than behind your back. It opens a tab with the code it wants to run, in the
+right project (local folder, Docker container, SSH server, the Laravel Sandbox or plain PHP), and you review it, edit
+it if you like and press Run. The agent then reads the result from the tab: echo output, dumps, SQL queries,
+exceptions and the return value, the same text Copy output gives you. A small robot icon marks a tab an agent filled
+until you edit or run it.
+
+**Agents can run code** decides whether the agent may also run code itself:
+
+- **No, I run it** (default): the agent prepares tabs and waits for you to run them.
+- **After I confirm**: the agent can run a tab, or run code without a tab, after you say yes to each run.
+- **Without asking**: the agent runs code freely. Projects marked as production still ask.
+
+The agent can also check a project's PHP and framework version and read its log files.
 
 - The server listens on 127.0.0.1 only, and every request needs the token from Settings. Requests from web pages are
   refused. **New token** replaces it; tools set up with the old one stop working.
 - Runs show up in History like your own.
-- On a project marked as production, Tinkerbox shows the code and asks you before each run.
 - The code runs for real against the project's database and services, like code you type.
 
 ### Project snippets

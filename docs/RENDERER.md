@@ -186,6 +186,7 @@ Auto-evaluate (`settings.autoRun`): `setCode` schedules `run({ auto: true })` af
 Production guard (`utils/production.ts`): on a connection with `production: true`, runs the user starts (and re-runs
 after a watched file changes) ask with `ui.confirm('Run on production?')`; auto-evaluate does not run there and shows
 one toast per tab. `RunArgs.trigger` is `'manual' | 'auto' | 'watch'`.
+`RunArgs.confirmed` skips the production confirm when the caller already asked (MCP bridge).
 
 ### `useSnippetsStore()`
 `snippets: Snippet[]` (user + project snippets of `connectionId`), `loaded`, `loading`, `connectionId`, getters
@@ -249,6 +250,15 @@ Modal components declare the props below with `defineProps`, use `<Modal>` from 
 
 
 ---
+
+## MCP bridge (`@/mcp/bridge`)
+
+Answers `mcp:request` events from the MCP server (installed by `bootstrap.start()` after the tabs are restored) with
+`mcp:respond`. `listTabs`; `openTab` (new active tab, never runs, info toast, a Bot badge until the user edits or runs
+it); `updateTab` (`tabs.replaceCode`); `getTab`; `runTab` (one dialog for the `ask` policy and production together,
+then `tabs.run({ trigger: 'manual', confirmed: true })`; waits for a run in progress instead of cancelling it);
+`waitForRun` (resolves with a result that finished after `since`, null on timeout). `useAgentTabsStore().preparedBy(tabId)`
+drives the tab badge. The run policy itself is enforced in main.
 
 ## Commands (`@/commands`)
 

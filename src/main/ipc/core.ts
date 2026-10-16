@@ -53,6 +53,13 @@ export function coreHandlers(ctx: ShellContext) {
       await ctx.mcp.settled()
       return ctx.mcp.status()
     },
+    'mcp:respond': (_e, id, reply) => {
+      const r = obj(reply, 'reply')
+      ctx.mcpUi.respond(
+        nonEmptyStr(id, 'id', 200),
+        r.ok === true ? { ok: true, value: r.value } : { ok: false, error: typeof r.error === 'string' ? r.error.slice(0, 2000) : 'Unknown error' }
+      )
+    },
     'mcp:regenerateToken': async () => {
       await ctx.mcp.settled()
       return ctx.mcp.regenerateToken()

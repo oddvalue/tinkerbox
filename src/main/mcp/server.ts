@@ -9,14 +9,16 @@ import { timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { registerTools, type McpDeps } from './tools'
+import { clientName, registerTools, type McpDeps } from './tools'
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024
 
 const INSTRUCTIONS = [
-  'Tinkerbox runs PHP code inside the user\'s projects (local folders, Docker containers, SSH servers) with the framework booted, like `php artisan tinker`.',
-  'Use list_projects to see the projects, project_info to check one, and run_php to run code; the result shows output, dumps, SQL queries, exceptions and the last expression\'s value.',
-  'Code runs for real against the project\'s database and services. Projects marked production ask the user to confirm each run.'
+  'Tinkerbox is the user\'s desktop app for running PHP inside their projects (local folders, Docker containers, SSH servers) with the framework booted, like `php artisan tinker`.',
+  'Use it to put code in front of the user: open_tab opens a tab with your code in a project so they can review, edit and run it; wait_for_run returns the result once they have run it, and get_tab shows the code as they left it.',
+  'Results show output, dumps, SQL queries with bindings, exceptions and the value of the last expression.',
+  'Whether you may run code yourself (run_tab, run_php) is the user\'s choice; list_projects reports it as runPolicy (review: the user runs it; ask: each run asks them; allow: no question, except on production projects).',
+  'Code runs for real against the project\'s database and services.'
 ].join(' ')
 
 export interface McpServerOptions {
@@ -142,7 +144,7 @@ export class McpHttpServer {
       }
 
       const mcp = new McpServer({ name: 'tinkerbox', title: 'Tinkerbox', version: this.options.version }, { instructions: INSTRUCTIONS })
-      registerTools(mcp, this.options.deps)
+      registerTools(mcp, this.options.deps, clientName(req.headers['user-agent']))
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
       res.on('close', () => {
         void transport.close()

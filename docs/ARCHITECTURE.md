@@ -446,10 +446,17 @@ sees them, requests with an `Origin` header (web pages), a `Host` other than 127
 without `Authorization: Bearer <settings.mcp.token>` (compared in constant time). `index.ts` (`McpController`) follows
 the settings, creates the token on first use (sealed like the GitHub token) and serves `mcp:status` /
 `mcp:regenerateToken` for Settings → Advanced. `tools.ts` holds the tools, with everything injected (`McpDeps`, built
-from the shell context in `deps.ts`): `list_projects`, `run_php` (through `RunService.run`, so runs land in History;
-unique `mcp-<uuid>` run ids, tab id `mcp`), `project_info` (`testConnection`), `list_logs` and `read_log`. Run results
-are rendered with `resultToText` from `src/shared/text/dumpText.ts`, the formatter behind Copy output. A run on a
-`production` connection first shows a native confirmation with the code; declining returns a tool error.
+from the shell context in `deps.ts`). The agent drives the app's tabs: `open_tab`, `update_tab`, `list_tabs`,
+`get_tab`, `run_tab` and `wait_for_run` go to the renderer, which owns the tabs, through `uiBridge.ts`: an
+`mcp:request` event (sent through the delivery queue, so it waits for the renderer and focuses the window for actions
+the user should see) answered with `mcp:respond`. The renderer side is `src/renderer/src/mcp/bridge.ts`.
+`settings.mcp.runPolicy` decides whether agents may run code: `review` refuses `run_tab` and `run_php` (the user runs
+the tab, `wait_for_run` returns the result), `ask` confirms each run (in the renderer for tabs, natively for
+`run_php`), `allow` runs without asking; production connections always ask. `run_php` runs without a tab through
+`RunService.run`, so runs land in History (unique `mcp-<uuid>` run ids, tab id `mcp`). `project_info`
+(`testConnection`), `list_logs` and `read_log` only read. Results are rendered with `resultToText` from
+`src/shared/text/dumpText.ts`, the formatter behind Copy output. The client's name for toasts and dialogs comes from
+the request's User-Agent ("Claude Code").
 
 **Extension point: transports.** Execution goes through a small interface, so a transport for another target is a new
 file that calls `registerTransport()`; `runCode`, the data modes and the IPC layer do not change. Other remote

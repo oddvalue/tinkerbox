@@ -113,6 +113,7 @@ export function createMockBridge(platform: NodeJS.Platform): TinkerboxBridge {
     'docker:composeProject': () => null,
     'ssh:hosts': () => [],
     'mcp:status': () => ({ enabled: false, running: false, url: 'http://127.0.0.1:47474/mcp', token: '', command: '', error: MOCK_NOTICE }),
+    'mcp:respond': () => undefined,
     'mcp:regenerateToken': () => ({ enabled: false, running: false, url: 'http://127.0.0.1:47474/mcp', token: '', command: '', error: MOCK_NOTICE }),
     'docker:composeUp': () => {
       throw new Error(MOCK_NOTICE)

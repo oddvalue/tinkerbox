@@ -7,6 +7,8 @@ import type {
   CustomTheme,
   DockerComposeProject,
   McpStatus,
+  McpUiReply,
+  McpUiRequest,
   DockerContainer,
   EnvironmentInfo,
   HerdSite,
@@ -74,6 +76,8 @@ export interface InvokeChannels {
   'mcp:status': [[], McpStatus]
   /** Replace the bearer token (connected clients must be set up again). */
   'mcp:regenerateToken': [[], McpStatus]
+  /** The renderer's answer to an `mcp:request` event. */
+  'mcp:respond': [[id: string, reply: McpUiReply], void]
 
   // Laravel Sandbox -------------------------------------------------------------------
   'sandbox:status': [[], SandboxStatus]
@@ -155,6 +159,8 @@ export interface EventChannels {
   'run:progress': RunProgressEvent
   /** Native application menu item triggered a renderer command. */
   'menu:command': { command: CommandId }
+  /** The MCP server asks the renderer to act on tabs; answer with `mcp:respond` (same id). */
+  'mcp:request': { id: string; request: McpUiRequest }
   /** Settings changed (e.g. from main-side logic or another window). */
   'settings:changed': Settings
   /** Connections changed in main (e.g. openLocal from the CLI helper). */
