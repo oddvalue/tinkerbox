@@ -16,9 +16,9 @@ export function newMcpToken(): string {
   return randomBytes(32).toString('base64url')
 }
 
-/** `claude mcp add` command for the connect instructions in Settings. */
+/** `claude mcp add` command for the connect instructions in Settings (user scope: available in every project). */
 export function claudeMcpCommand(url: string, token: string): string {
-  return `claude mcp add --transport http tinkerbox ${url} --header "Authorization: Bearer ${token}"`
+  return `claude mcp add --transport http --scope user tinkerbox ${url} --header "Authorization: Bearer ${token}"`
 }
 
 export class McpController {

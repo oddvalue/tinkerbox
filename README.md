@@ -264,7 +264,7 @@ Tinkerbox can let coding agents such as Claude Code run PHP in your projects. Tu
 server**, then run the command shown there once, for example:
 
 ```sh
-claude mcp add --transport http tinkerbox http://127.0.0.1:47474/mcp --header "Authorization: Bearer <token>"
+claude mcp add --transport http --scope user tinkerbox http://127.0.0.1:47474/mcp --header "Authorization: Bearer <token>"
 ```
 
 The tool can then list your projects (local folders, Docker containers, SSH servers, the Laravel Sandbox and plain
